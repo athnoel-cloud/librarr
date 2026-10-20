@@ -12,6 +12,7 @@ import (
 
 func (s *Server) handleCSVImport(w http.ResponseWriter, r *http.Request) {
 	// Parse multipart form for file upload.
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)        // cap the body, not only the in-memory part
 	if err := r.ParseMultipartForm(10 << 20); err != nil { // 10MB max
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"success": false, "error": "Failed to parse form: " + err.Error(),

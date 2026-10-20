@@ -58,7 +58,8 @@ func (rl *RateLimiter) cleanup() {
 }
 
 func (rl *RateLimiter) ruleForPath(path string) string {
-	if path == "/api/login" {
+	switch path {
+	case "/api/login", "/api/login/totp", "/api/register":
 		return "login"
 	}
 	if strings.HasPrefix(path, "/api/search") {
@@ -140,13 +141,15 @@ func RateLimitMiddleware(rl *RateLimiter, next http.Handler) http.Handler {
 		}
 
 		// Use RemoteAddr as primary identity. X-Forwarded-For is trivially
-		// spoofable unless behind a trusted reverse proxy. If behind a proxy,
-		// take only the rightmost (last hop before our server) IP from XFF.
+		// spoofable, so it is honored only when the immediate peer is a
+		// configured reverse proxy (LIBRARR_TRUSTED_PROXIES), and then only
+		// its rightmost entry (the hop that proxy appended).
 		identity := r.RemoteAddr
-		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-			parts := strings.Split(xff, ",")
-			// Use the last entry (closest proxy hop) -- less spoofable than first.
-			identity = strings.TrimSpace(parts[len(parts)-1])
+		if remoteFromTrustedProxy(r) {
+			if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+				parts := strings.Split(xff, ",")
+				identity = strings.TrimSpace(parts[len(parts)-1])
+			}
 		}
 
 		allowed, retryAfter, rule, limit := rl.Check(identity, r.URL.Path)

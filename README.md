@@ -233,7 +233,8 @@ behind TLS.
 | `OIDC_AUTO_CREATE_USERS` | `true` | Auto-create users on first OIDC login |
 | `OIDC_DEFAULT_ROLE` | `user` | Default role for OIDC-created users |
 | `OIDC_PROXY_HEADERS_ENABLED` | `false` | Trust Authentik identity headers from a reverse proxy |
-| `LIBRARR_TRUSTED_PROXIES` | | Comma-separated IPs/CIDRs of your reverse proxy. **Required for `OIDC_PROXY_HEADERS_ENABLED`**; also gates `X-Forwarded-Proto` |
+| `LIBRARR_TRUSTED_PROXIES` | | Comma-separated IPs/CIDRs of your reverse proxy. **Required for `OIDC_PROXY_HEADERS_ENABLED`**; also gates `X-Forwarded-Proto` and `X-Forwarded-For` (rate limiting) |
+| `LIBRARR_SECURE_COOKIES` | `false` | Force the `Secure` flag on the session cookie, for a TLS-terminating tunnel (cloudflared, Tailscale Funnel) that is not declared in `LIBRARR_TRUSTED_PROXIES` |
 
 When `OIDC_PROXY_HEADERS_ENABLED=true` and Librarr sits behind a trusted reverse
 proxy that injects Authentik headers like `X-Authentik-Username`, it will treat
@@ -442,7 +443,7 @@ Legacy per-source env vars (e.g. `PROWLARR_URL` and other per-driver overrides) 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `RATE_LIMIT_ENABLED` | `true` | Per-source rate limiting |
-| `METRICS_ENABLED` | `true` | Prometheus metrics endpoint |
+| `METRICS_ENABLED` | `true` | Prometheus metrics endpoint (requires the `API_KEY` via `X-Api-Key` or `?apikey=` when one is configured) |
 | `WEBNOVEL_ENABLED` | `true` | Web novel search (requires lncrawl container) |
 | `WISHLIST_CLEANUP_ENABLED` | `false` | Periodically remove wishlist items already found in the library |
 | `WISHLIST_CLEANUP_INTERVAL_HOURS` | `12` | Hours between wishlist cleanup scans |
@@ -472,7 +473,7 @@ values saved there persist in `settings.json` and override the environment.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `TORZNAB_API_KEY` | | API key for the Torznab endpoint |
+| `TORZNAB_API_KEY` | | API key for the Torznab endpoint. Required (the endpoint answers 401) as soon as `AUTH_USERNAME` or `API_KEY` is configured, so an authenticated instance never exposes an anonymous search proxy |
 
 ## API Endpoints
 

@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"crypto/subtle"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -244,7 +245,7 @@ func (s *Server) registerAuthRoutes() {
 	// Authentication.
 	s.mux.HandleFunc("POST /api/login", handleLogin(s.cfg, s.db, s.sessions))
 	s.mux.HandleFunc("POST /api/login/totp", handleLoginTOTP(s.db, s.sessions))
-	s.mux.HandleFunc("POST /api/register", handleRegister(s.db, s.sessions))
+	s.mux.HandleFunc("POST /api/register", handleRegister(s.cfg, s.db, s.sessions))
 	s.mux.HandleFunc("POST /api/logout", handleLogout(s.sessions, s.db))
 	s.mux.HandleFunc("GET /api/auth/status", handleAuthStatus(s.cfg, s.db, s.sessions))
 
@@ -469,7 +470,23 @@ func (s *Server) registerFeedRoutes() {
 
 	// Prometheus metrics (Feature 16).
 	if s.cfg.MetricsEnabled {
-		s.mux.HandleFunc("GET /metrics", s.handleMetrics)
+		// /metrics is auth-exempt (scrapers do not hold sessions); when an
+		// API key exists, require it rather than publishing job counts,
+		// library size and source health to anyone reaching the port.
+		s.mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) {
+			if s.cfg.HasAPIKey() {
+				key := r.Header.Get("X-Api-Key")
+				if key == "" {
+					key = r.URL.Query().Get("apikey")
+				}
+				if subtle.ConstantTimeCompare([]byte(key), []byte(s.cfg.APIKey)) != 1 {
+					w.Header().Set("WWW-Authenticate", `ApiKey realm="metrics"`)
+					http.Error(w, "api key required", http.StatusUnauthorized)
+					return
+				}
+			}
+			s.handleMetrics(w, r)
+		})
 	}
 
 	// Torznab API.
@@ -562,6 +579,11 @@ func (s *Server) securityHeadersMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("X-XSS-Protection", "1; mode=block")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		// API responses are per-user and sometimes secret (TOTP setup, settings):
+		// never let a browser or an intermediate cache keep them.
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			w.Header().Set("Cache-Control", "no-store")
+		}
 		// Strict CSP: no inline scripts anywhere (the UI uses external files +
 		// event delegation, and Tailwind/Inter are vendored under /static/).
 		//   style-src 'unsafe-inline' — the Tailwind Play runtime injects a
@@ -614,11 +636,11 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
 		if origin != "" {
-			// Reflect the request origin only if it matches the Host header
-			// (same-origin) or is empty. This prevents cross-origin credential theft
-			// while still allowing same-origin requests from the web UI.
-			host := r.Host
-			if strings.Contains(origin, host) {
+			// Reflect the request origin with credentials only when it is
+			// exactly this host (same-origin), whatever the scheme the proxy
+			// terminated. A substring match let a sibling subdomain or a
+			// longer host name read authenticated responses.
+			if origin == "http://"+r.Host || origin == "https://"+r.Host {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
 				w.Header().Set("Access-Control-Allow-Credentials", "true")
 			}

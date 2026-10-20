@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 
@@ -107,6 +108,12 @@ func proxyIdentityFromRequest(r *http.Request) string {
 
 func isSecureRequest(r *http.Request) bool {
 	if r.TLS != nil {
+		return true
+	}
+	// LIBRARR_SECURE_COOKIES=true forces the Secure flag for deployments
+	// behind a TLS-terminating tunnel that is not declared as a trusted proxy
+	// (e.g. cloudflared on a Docker network).
+	if v := strings.ToLower(strings.TrimSpace(os.Getenv("LIBRARR_SECURE_COOKIES"))); v == "1" || v == "true" {
 		return true
 	}
 	// Forwarded headers are honored only when the immediate peer is a

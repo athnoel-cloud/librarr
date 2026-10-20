@@ -29,7 +29,14 @@ func NewHandler(cfg *config.Config, manager *search.Manager) *Handler {
 
 // ServeHTTP handles GET /torznab/api requests.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Validate API key if configured.
+	// Validate API key if configured. An instance that authenticates its
+	// users must not expose an anonymous search proxy (it runs every
+	// configured source, with the operator's Prowlarr key) just because no
+	// Torznab key was set.
+	if h.cfg.TorznabAPIKey == "" && (h.cfg.HasAuth() || h.cfg.HasAPIKey()) {
+		h.writeError(w, "100", "Torznab API key not configured (set TORZNAB_API_KEY)", http.StatusUnauthorized)
+		return
+	}
 	if h.cfg.TorznabAPIKey != "" {
 		apikey := r.URL.Query().Get("apikey")
 		if subtle.ConstantTimeCompare([]byte(apikey), []byte(h.cfg.TorznabAPIKey)) != 1 {
