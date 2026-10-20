@@ -48,6 +48,8 @@ type grab struct {
 	title    string
 	wantedID int64
 	hash     string
+	savePath string
+	category string
 }
 
 // fakeDownloader records grabs and can be made to fail. Like the real
@@ -69,13 +71,13 @@ func (f *fakeDownloader) StartDirectDownloadFor(fileURL, title, _, _, _ string, 
 	return f.job("direct", fileURL, title, wantedID)
 }
 
-func (f *fakeDownloader) StartTorrentDownload(torrentURL, title, _, _, expectedInfoHash string) error {
+func (f *fakeDownloader) StartTorrentDownload(torrentURL, title, savePath, category, expectedInfoHash string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.fail != nil {
 		return f.fail
 	}
-	f.grabs = append(f.grabs, grab{kind: "torrent", url: torrentURL, title: title, hash: expectedInfoHash})
+	f.grabs = append(f.grabs, grab{kind: "torrent", url: torrentURL, title: title, hash: expectedInfoHash, savePath: savePath, category: category})
 	return nil
 }
 
@@ -621,5 +623,65 @@ func TestWrongVolume(t *testing.T) {
 		if got := wrongVolume(c.wanted, c.release); got != c.wrong {
 			t.Errorf("wrongVolume(%q, %q) = %v, want %v", c.wanted, c.release, got, c.wrong)
 		}
+	}
+}
+
+// A Prowlarr release carries the protocol and an indexer download link: it must
+// go to the torrent client with the media type's qBittorrent target, never to
+// the direct downloader (whose outbound guard rejects the Prowlarr LAN origin).
+func TestRun_TorrentReleaseGoesToTheTorrentClient(t *testing.T) {
+	f := newSchedFixture(t)
+	f.cfg.QBSavePath, f.cfg.QBCategory = "/downloads/books", "librarr"
+	f.cfg.QBMangaSavePath, f.cfg.QBMangaCategory = "/downloads/manga", "manga"
+	id := f.want("Dandadan T21", "", "manga")
+	r := res("Dandadan.T21.FRENCH.CBZ", "torrent", "cbz", 95, "http://prowlarr:9696/1/download?apikey=k&link=abc")
+	r.DownloadProtocol, r.InfoHash = "torrent", "c7bd657fcd4b49fa48ad1cfd079ea16b87a40566"
+	f.srch.results["Dandadan T21"] = []models.SearchResult{r}
+
+	stats := f.s.RunCtx(context.Background())
+	if stats.Grabbed != 1 {
+		t.Fatalf("stats: %+v", stats)
+	}
+	g := f.dl.last()
+	if g.kind != "torrent" || g.url != r.DownloadURL || g.hash != r.InfoHash {
+		t.Fatalf("grabbed %+v, want the Prowlarr link through the torrent client", g)
+	}
+	if g.savePath != "/downloads/manga" || g.category != "manga" {
+		t.Fatalf("qBittorrent target %q/%q, want the manga save path and category", g.savePath, g.category)
+	}
+	if it := f.item(id); it.ActiveJobID == "" {
+		t.Fatalf("row after grab must track the in-flight torrent: %+v", it)
+	}
+}
+
+// Nyaa-style feeds put the magnet in download_url with no protocol field.
+func TestRun_MagnetInDownloadURLIsATorrent(t *testing.T) {
+	f := newSchedFixture(t)
+	f.cfg.QBSavePath, f.cfg.QBCategory = "/downloads/books", "librarr"
+	f.want("Some Novel", "", "ebook")
+	f.srch.results["Some Novel"] = []models.SearchResult{
+		res("Some Novel [EPUB]", "nyaa_manga", "epub", 90, "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567"),
+	}
+
+	if stats := f.s.RunCtx(context.Background()); stats.Grabbed != 1 {
+		t.Fatalf("stats: %+v", stats)
+	}
+	g := f.dl.last()
+	if g.kind != "torrent" || !strings.HasPrefix(g.url, "magnet:") || g.category != "librarr" {
+		t.Fatalf("grabbed %+v, want a magnet handed to the torrent client with the ebook category", g)
+	}
+}
+
+// Direct sources (Gutenberg, Z-Library, ...) keep using the direct downloader.
+func TestRun_DirectReleaseStillUsesTheDirectDownloader(t *testing.T) {
+	f := newSchedFixture(t)
+	f.want("Dune", "", "ebook")
+	f.srch.results["Dune"] = []models.SearchResult{res("Dune", "gutenberg", "epub", 90, "https://www.gutenberg.org/ebooks/1.epub")}
+
+	if stats := f.s.RunCtx(context.Background()); stats.Grabbed != 1 {
+		t.Fatalf("stats: %+v", stats)
+	}
+	if g := f.dl.last(); g.kind != "direct" {
+		t.Fatalf("grabbed %+v, want the direct downloader", g)
 	}
 }

@@ -576,6 +576,27 @@ func (s *Scheduler) startDownload(result models.SearchResult, item models.Wishli
 			return "", err
 		}
 		return job.ID, nil
+	case isTorrentRelease(result):
+		// Torrent releases must reach the torrent client, never the direct
+		// downloader: an indexer download link (Prowlarr) serves a .torrent,
+		// and the outbound guard rejects the LAN origin that the client path
+		// explicitly tolerates. Same URL order and qBittorrent target as the
+		// manual grab handler.
+		url := torrentURL(result)
+		if url == "" {
+			return "", errors.New("torrent release has no magnet or download link")
+		}
+		savePath, category := s.torrentTarget(item.MediaType)
+		err := s.downloadMgr.StartTorrentDownload(url, title, savePath, category, result.InfoHash)
+		if err != nil {
+			var verificationWarning *download.TorrentVerificationWarning
+			if errors.As(err, &verificationWarning) {
+				slog.Warn("scheduler: torrent accepted; verification pending", "title", title, "warning", err.Error())
+			} else {
+				return "", err
+			}
+		}
+		return download.TorrentWantedRef(result.InfoHash), nil
 	case result.DownloadURL != "" || result.EpubURL != "":
 		dlURL := result.DownloadURL
 		if dlURL == "" {
@@ -586,23 +607,55 @@ func (s *Scheduler) startDownload(result models.SearchResult, item models.Wishli
 			return "", err
 		}
 		return job.ID, nil
-	case result.MagnetURL != "" || result.InfoHash != "":
-		url := result.MagnetURL
-		if url == "" {
-			url = "magnet:?xt=urn:btih:" + result.InfoHash
-		}
-		err := s.downloadMgr.StartTorrentDownload(url, title, "", "", result.InfoHash)
-		if err != nil {
-			var verificationWarning *download.TorrentVerificationWarning
-			if errors.As(err, &verificationWarning) {
-				slog.Warn("scheduler: torrent accepted; verification pending", "title", title, "warning", err.Error())
-			} else {
-				return "", err
-			}
-		}
-		return download.TorrentWantedRef(result.InfoHash), nil
 	}
 	return "", errors.New("release has no downloadable link")
+}
+
+// isTorrentRelease reports whether a release has to go through the torrent
+// client, whichever field the indexer driver filled: Prowlarr sets the
+// protocol and a download link, Nyaa-style feeds put the magnet in the
+// download link, others only carry an info hash.
+func isTorrentRelease(r models.SearchResult) bool {
+	if r.DownloadProtocol == "torrent" || r.MagnetURL != "" || r.InfoHash != "" {
+		return true
+	}
+	if strings.HasPrefix(strings.ToLower(r.DownloadURL), "magnet:") {
+		return true
+	}
+	switch r.Source {
+	case "torrent", "prowlarr_audiobooks", "prowlarr_manga", "nyaa_manga",
+		"tpb", "tpb_audiobook", "booktracker", "booktracker_audiobook":
+		return true
+	}
+	return false
+}
+
+// torrentURL picks the link handed to the torrent client in the same order as
+// the manual grab handler (resolveTorrentURL): the indexer download link, the
+// magnet, then a magnet built from the info hash.
+func torrentURL(r models.SearchResult) string {
+	switch {
+	case r.DownloadURL != "":
+		return r.DownloadURL
+	case r.MagnetURL != "":
+		return r.MagnetURL
+	case r.InfoHash != "":
+		return "magnet:?xt=urn:btih:" + r.InfoHash
+	}
+	return ""
+}
+
+// torrentTarget returns the qBittorrent save path and category for a media
+// type, so the completion watcher (which polls per category) picks the
+// download up and imports it into the right library.
+func (s *Scheduler) torrentTarget(mediaType string) (savePath, category string) {
+	switch mediaType {
+	case "audiobook":
+		return s.cfg.QBAudiobookSavePath, s.cfg.QBAudiobookCategory
+	case "manga":
+		return s.cfg.QBMangaSavePath, s.cfg.QBMangaCategory
+	}
+	return s.cfg.QBSavePath, s.cfg.QBCategory
 }
 
 // record persists the outcome on the row and remembers it for the status API.
