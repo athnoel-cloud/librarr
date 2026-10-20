@@ -12,6 +12,8 @@
   /* Card hover */
   .book-card { transition: transform 0.15s ease, box-shadow 0.15s ease; }
   .book-card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.3); }
+  /* List rows keep the .book-card contract without the card lift. */
+  .result-row:hover { transform: none; box-shadow: none; }
 
   /* Skeleton shimmer */
   .skeleton { background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
@@ -68,31 +70,20 @@
     /* Search bar */
     #search-input { font-size: 16px; } /* Prevent iOS zoom on focus */
 
-    /* Results grid — stack vertically */
-    #search-results { grid-template-columns: 1fr 1fr !important; gap: 0.5rem; }
+    /* Result columns are the component's own responsive classes (Search.tsx). */
 
     /* Sub-tabs scroll */
     .sub-tab { padding: 0.5rem 0.75rem; font-size: 0.8rem; }
 
-    /* Sort bar */
-    #search-sort-bar { flex-direction: column; gap: 0.5rem; }
+    /* Sort bar stays one wrapping row: a column cost 130 px before the first result */
+    #search-sort-bar { gap: 0.5rem; }
 
     /* Larger touch targets for buttons */
     button, a.sub-tab, .nav-tab { min-height: 44px; }
 
-    /* Full width cards on very small screens */
-    @media (max-width: 400px) {
-      #search-results { grid-template-columns: 1fr !important; }
-    }
-
     /* Library and download list items */
-    .book-card { margin-bottom: 0.5rem; }
+    .book-card:not(.result-row) { margin-bottom: 0.5rem; }
 
     /* Main content padding */
     main.flex-1 { padding-left: 0.75rem; padding-right: 0.75rem; }
-  }
-
-  @media (max-width: 768px) {
-    /* Slightly smaller grid for tablets */
-    #search-results { grid-template-columns: repeat(3, 1fr) !important; }
   }

@@ -177,8 +177,11 @@ def test_wishlist_add_search_delete(ui):
 def test_broken_cover_falls_back_to_placeholder(ui):
     page = ui["page"]
     _render_card(page,{"source":"fixture","title":"Fallback Probe","cover_url":"/static/definitely-missing.png"})
+    # The list view (default) shows no cover; covers live in the cards view.
+    page.click('[data-action="setResultsView"][data-arg="cards"]')
     page.wait_for_selector('.cover-placeholder')
     assert page.locator('.cover-placeholder').inner_text()=='F'
+    page.click('[data-action="setResultsView"][data-arg="list"]')  # restore the persisted default
 
 
 # ── i18n toggle (re-renders DOM incl. converted anchor templates) ───────────

@@ -206,6 +206,7 @@ function App(): React.JSX.Element {
           setNotice={setNotice}
           intent={searchIntent}
           active={tab === "search"}
+          admin={auth.role === "admin"}
         />
         {tab === "wishlist" && (
           <Wanted
