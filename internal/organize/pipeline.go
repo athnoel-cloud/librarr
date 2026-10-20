@@ -165,17 +165,23 @@ func (o *Organizer) OrganizeAudiobook(filePath, title, author string) (string, e
 	return destPath, nil
 }
 
-// OrganizeManga moves manga files into the organized directory structure: {MangaDir}/{Series}/{file}
-// Also copies to KAVITA_MANGA_LIBRARY_PATH if configured.
+// OrganizeManga places manga files under {MangaDir}/{Series}/ — or, when one
+// of MangaLibraryRoots already holds the series, in that existing directory,
+// so a reader that keeps a series in a single folder (Kavita) sees the new
+// volume with the others. Files whose volume number is recognised are renamed
+// with MangaFilePattern; the others keep their name.
 func (o *Organizer) OrganizeManga(filePath, seriesTitle string) (string, error) {
 	if !o.cfg.FileOrgEnabled {
 		return filePath, nil
 	}
 
-	safeTitle := cleanSeriesTitle(seriesTitle)
-	destDir, err := joinUnder(o.cfg.MangaDir, safeTitle)
-	if err != nil {
-		return filePath, err
+	series, releaseVol, releaseOK := ParseMangaRelease(seriesTitle)
+	destDir := findSeriesDir(o.cfg.MangaLibraryRoots, series)
+	if destDir == "" {
+		var err error
+		if destDir, err = joinUnder(o.cfg.MangaDir, series); err != nil {
+			return filePath, err
+		}
 	}
 	if err := os.MkdirAll(destDir, 0755); err != nil {
 		return filePath, err
@@ -194,7 +200,9 @@ func (o *Organizer) OrganizeManga(filePath, seriesTitle string) (string, error) 
 		}
 		for _, entry := range entries {
 			src := filepath.Join(filePath, entry.Name())
-			dst := filepath.Join(destDir, entry.Name())
+			// Inside a multi-file release each file names its own volume;
+			// the release number must not be stamped on every file.
+			dst := filepath.Join(destDir, o.mangaFileName(series, entry.Name(), 0, false))
 			_ = o.placeFile(src, dst)
 		}
 		// Only a move consumes the download; hardlink/copy must leave the
@@ -204,36 +212,31 @@ func (o *Organizer) OrganizeManga(filePath, seriesTitle string) (string, error) 
 		}
 		resultPath = destDir
 	} else {
-		destPath := filepath.Join(destDir, filepath.Base(filePath))
+		destPath := filepath.Join(destDir, o.mangaFileName(series, filepath.Base(filePath), releaseVol, releaseOK))
 		if err := o.placeFile(filePath, destPath); err != nil {
 			return filePath, err
 		}
 		resultPath = destPath
 	}
 
-	// Also copy to Kavita manga library if configured.
-	if o.cfg.KavitaMangaLibraryPath != "" {
-		kavitaDir, err := joinUnder(o.cfg.KavitaMangaLibraryPath, safeTitle)
-		if err == nil && os.MkdirAll(kavitaDir, 0755) == nil {
-			resultInfo, err := os.Stat(resultPath)
-			if err == nil {
-				if resultInfo.IsDir() {
-					entries, _ := os.ReadDir(resultPath)
-					for _, entry := range entries {
-						src := filepath.Join(resultPath, entry.Name())
-						dst := filepath.Join(kavitaDir, entry.Name())
-						_ = copyFileForOrg(src, dst)
-					}
-				} else {
-					dst := filepath.Join(kavitaDir, filepath.Base(resultPath))
-					_ = copyFileForOrg(resultPath, dst)
-				}
-				slog.Info("copied to kavita manga library", "path", kavitaDir)
-			}
-		}
-	}
-
+	slog.Info("manga organized", "series", series, "dest", resultPath, "mode", o.importMode())
 	return resultPath, nil
+}
+
+// mangaFileName applies MangaFilePattern to a file whose volume is known —
+// from its own name first, else from the release when that fallback is
+// allowed. An empty pattern keeps original names.
+func (o *Organizer) mangaFileName(series, base string, releaseVol int, useRelease bool) string {
+	if o.cfg.MangaFilePattern == "" {
+		return base
+	}
+	if _, vol, ok := ParseMangaRelease(base); ok {
+		return MangaFileName(o.cfg.MangaFilePattern, series, vol, filepath.Ext(base))
+	}
+	if useRelease && releaseVol > 0 {
+		return MangaFileName(o.cfg.MangaFilePattern, series, releaseVol, filepath.Ext(base))
+	}
+	return base
 }
 
 var (

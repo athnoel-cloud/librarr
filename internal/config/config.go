@@ -45,6 +45,13 @@ type Config struct {
 	MangaDir         string
 	IncomingDir      string
 	MangaIncomingDir string
+	// MangaLibraryRoots are extra directories (as seen by Librarr) that hold
+	// manga series; a new volume is placed next to its series when one of
+	// them already has it, otherwise under MangaDir.
+	MangaLibraryRoots []string
+	// MangaFilePattern names a volume whose number was recognised:
+	// {series}, {volume}, {volume:02}, {volume:03}, {ext}.
+	MangaFilePattern string
 
 	// Torznab
 	TorznabAPIKey string
@@ -319,12 +326,14 @@ func buildFromEnv() *Config {
 		ProwlarrURL:    getEnv("PROWLARR_URL", ""),
 		ProwlarrAPIKey: getEnv("PROWLARR_API_KEY", ""),
 
-		FileOrgEnabled:   getEnvBool("FILE_ORG_ENABLED", true),
-		EbookDir:         getEnv("EBOOK_DIR", "/books/ebooks"),
-		AudiobookDir:     getEnv("AUDIOBOOK_DIR", "/books/audiobooks"),
-		MangaDir:         getEnv("MANGA_DIR", "/books/manga"),
-		IncomingDir:      getEnv("INCOMING_DIR", "/data/incoming"),
-		MangaIncomingDir: getEnv("MANGA_INCOMING_DIR", "/data/manga-incoming"),
+		FileOrgEnabled:    getEnvBool("FILE_ORG_ENABLED", true),
+		EbookDir:          getEnv("EBOOK_DIR", "/books/ebooks"),
+		AudiobookDir:      getEnv("AUDIOBOOK_DIR", "/books/audiobooks"),
+		MangaDir:          getEnv("MANGA_DIR", "/books/manga"),
+		IncomingDir:       getEnv("INCOMING_DIR", "/data/incoming"),
+		MangaIncomingDir:  getEnv("MANGA_INCOMING_DIR", "/data/manga-incoming"),
+		MangaLibraryRoots: splitCSV(getEnv("MANGA_LIBRARY_ROOTS", "")),
+		MangaFilePattern:  getEnv("MANGA_FILE_PATTERN", "{series} - Vol. {volume:02}.{ext}"),
 
 		TorznabAPIKey: getEnv("TORZNAB_API_KEY", ""),
 

@@ -10,6 +10,7 @@ import (
 	neturl "net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/JeremiahM37/librarr/internal/config"
@@ -106,6 +107,11 @@ func (lt *LibraryTargets) copyToKavitaManga(filePath, seriesTitle string) {
 		return
 	}
 
+	// Already organized inside the Kavita library (KAVITA_MANGA_LIBRARY_PATH
+	// listed in MANGA_LIBRARY_ROOTS, or equal to MANGA_DIR): nothing to copy.
+	if rel, err := filepath.Rel(lt.cfg.KavitaMangaLibraryPath, filePath); err == nil && !strings.HasPrefix(rel, "..") {
+		return
+	}
 	destDir := filepath.Join(lt.cfg.KavitaMangaLibraryPath, sanitizePath(seriesTitle, 80))
 	if err := os.MkdirAll(destDir, 0755); err != nil {
 		slog.Error("create kavita manga dir failed", "error", err)

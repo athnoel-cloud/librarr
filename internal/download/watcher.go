@@ -547,7 +547,7 @@ func (w *Watcher) importManga(t TorrentInfo, savePath, source string) (bool, err
 		}
 
 		if inserted && w.targets != nil {
-			w.targets.ImportManga(destPath, t.Name)
+			w.targets.ImportManga(destPath, organize.MangaSeriesName(t.Name))
 		}
 	}
 

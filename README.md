@@ -351,7 +351,9 @@ which requires Transmission 3.0+).
 | `IMPORT_MODE` | (automatic) | How organized files reach the library: `move` (the download payload is consumed), `hardlink` (a second name for the same data — keeps seeding, no extra disk, same filesystem only), or `copy` (keeps seeding, uses twice the disk). Leave it unset and it follows `REMOVE_TORRENT_AFTER_IMPORT`: removing torrents moves, keeping them hardlinks. See [Seeding after import](#seeding-after-import). |
 | `EBOOK_DIR` | `/books/ebooks` | Organized ebook destination |
 | `AUDIOBOOK_DIR` | `/books/audiobooks` | Organized audiobook destination |
-| `MANGA_DIR` | `/books/manga` | Organized manga destination |
+| `MANGA_DIR` | `/books/manga` | Organized manga destination (new series) |
+| `MANGA_LIBRARY_ROOTS` | | Comma-separated directories (as seen by Librarr) that already hold manga series. A new volume is placed in the existing series directory when one of the roots has it — readers such as Kavita keep a series in a single folder — otherwise under `MANGA_DIR/{series}` |
+| `MANGA_FILE_PATTERN` | `{series} - Vol. {volume:02}.{ext}` | File name for a volume whose number was recognised (`T21`, `Tome 21`, `Vol. 21`, `v21`, `#21`, trailing number); tokens `{series}`, `{volume}`, `{volume:02}`, `{volume:03}`, `{ext}`. Empty keeps original names |
 | `INCOMING_DIR` | `/data/incoming` | Incoming file staging directory as seen by Librarr; qBittorrent paths beneath `QB_SAVE_PATH` are translated here before import |
 | `MANGA_INCOMING_DIR` | `/data/manga-incoming` | Manga incoming staging directory |
 
