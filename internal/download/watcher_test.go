@@ -753,3 +753,49 @@ func TestNZBImportAlwaysMovesEvenInHardlinkMode(t *testing.T) {
 		})
 	}
 }
+
+// A comic archive grabbed from the ebook tab (Prowlarr's book categories
+// include comics) must be imported through the manga pipeline instead of
+// staying "pending" forever because no epub/mobi/pdf/azw3 is found.
+func TestImportEbookRoutesComicArchiveToManga(t *testing.T) {
+	root := t.TempDir()
+	ebookDir := filepath.Join(root, "ebooks")
+	mangaDir := filepath.Join(root, "manga")
+	savePath := filepath.Join(root, "downloads", "Dandadan.T21.FRENCH.CBZ")
+	for _, d := range []string{ebookDir, mangaDir, savePath} {
+		if err := os.MkdirAll(d, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(savePath, "Dandadan T21.cbz"), []byte("payload"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	database, err := db.New(filepath.Join(root, "library.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+
+	cfg := &config.Config{FileOrgEnabled: true, EbookDir: ebookDir, MangaDir: mangaDir}
+	w := NewWatcher(cfg, database, nil, nil, organize.NewOrganizer(cfg), nil, nil)
+
+	info := TorrentInfo{Name: "Dandadan.T21.FRENCH.CBZ", Hash: "c7bd657f", TotalSize: 7}
+	if _, err := w.importEbook(info, savePath, "test"); err != nil {
+		t.Fatalf("importEbook with a comic archive: %v", err)
+	}
+
+	var organized []string
+	_ = filepath.WalkDir(mangaDir, func(path string, d fs.DirEntry, _ error) error {
+		if d != nil && !d.IsDir() && strings.HasSuffix(path, ".cbz") {
+			organized = append(organized, path)
+		}
+		return nil
+	})
+	if len(organized) != 1 {
+		t.Fatalf("expected the archive under MangaDir, found %v", organized)
+	}
+	if _, err := os.Stat(filepath.Join(ebookDir)); err != nil {
+		t.Fatal(err)
+	}
+}
