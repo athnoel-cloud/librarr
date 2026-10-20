@@ -61,10 +61,14 @@ func (f releaseFilter) check(title string) (ok bool, bonus float64, reason strin
 var (
 	volNonWord = regexp.MustCompile(`[^\p{L}\p{N}]+`)
 	volMarker  = map[string]bool{"vol": true, "volume": true, "book": true, "tome": true, "t": true, "part": true, "no": true}
+	// Compact markers ("T21", "v05", "Vol12") are one word: split the marker
+	// from its number so they compare like "Tome 21".
+	volCompact = regexp.MustCompile(`(?i)\b(t|v|vol|tome|book|part|no)(\d{1,3})\b`)
 )
 
 // volumeTokens lower-cases a title and splits it into words.
 func volumeTokens(s string) []string {
+	s = volCompact.ReplaceAllString(s, "$1 $2")
 	return strings.Fields(volNonWord.ReplaceAllString(strings.ToLower(s), " "))
 }
 

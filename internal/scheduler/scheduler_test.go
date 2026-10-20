@@ -618,6 +618,12 @@ func TestWrongVolume(t *testing.T) {
 		{"Fahrenheit 451", "Fahrenheit 451 (50th Anniversary)", false},
 		{"1984", "1984 Orwell", false},
 		{"Dune", "Dune 2", false},
+		// Compact markers: "T21", "v05" compare like "Tome 21", "Vol 5".
+		{"Dandadan T21", "Dandadan T22", true},
+		{"Dandadan T21", "Dandadan Tome 21", false},
+		{"Dandadan T21", "Dandadan.T21.Yukinobu.Tatsu.FR.[CBZ]-Dogbanov", false},
+		{"Primal Hunter Tome 5", "Primal.Hunter.T06.Zogarth.2026.FRENCH.[M4B]-SGFX", true},
+		{"One Piece v105", "One Piece v106", true},
 	}
 	for _, c := range cases {
 		if got := wrongVolume(c.wanted, c.release); got != c.wrong {
