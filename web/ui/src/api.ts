@@ -31,6 +31,9 @@ export interface SearchResult {
   library_item_id?: number;
   abb_url?: string;
   info_hash?: string;
+  // Go serialises MagnetURL as magnet_url; `magnet` is kept for fixtures that
+  // still use the old client-side name.
+  magnet_url?: string;
   magnet?: string;
   md5?: string;
   source_id?: string;
@@ -39,6 +42,18 @@ export interface SearchResult {
   sizeHuman?: string;
   leechers?: number;
   indexer?: string;
+  // Relevance scoring, filled in by the server-side scorer (0–100).
+  score?: number;
+  score_breakdown?: ScoreBreakdown;
+}
+export interface ScoreBreakdown {
+  title_match: number;
+  author_match: number;
+  format_score: number;
+  seeder_score: number;
+  size_score: number;
+  total: number;
+  confidence: "high" | "medium" | "low" | string;
 }
 export interface WishlistItem {
   id: number;

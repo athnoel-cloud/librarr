@@ -39,6 +39,7 @@ function keyOf(result: SearchResult) {
     result.url,
     result.abb_url,
     result.info_hash,
+    result.magnet_url,
     result.magnet,
     result.md5,
     result.source_id,
@@ -309,7 +310,10 @@ export function Search({
           md5: result.md5 || "",
           author: result.author || "",
           info_hash: result.info_hash || "",
-          magnet: result.magnet || "",
+          // The server reads magnet_url (models.DownloadRequest); `magnet` is
+          // kept so fixtures written against the old client name still match.
+          magnet_url: result.magnet_url || result.magnet || "",
+          magnet: result.magnet || result.magnet_url || "",
           media_type: result.media_type || "",
           download_protocol: result.download_protocol || "",
           force: !!result.in_library,
