@@ -56,12 +56,16 @@ func (p *Prowlarr) Search(ctx context.Context, query string) ([]models.SearchRes
 	var allResults []models.SearchResult
 	seenHashes := make(map[string]bool)
 
+	var lastErr error
+	succeeded := 0
 	for _, search := range p.searchVariants(query, categories) {
 		results, err := p.doSearch(ctx, search)
 		if err != nil {
 			slog.Warn("prowlarr search variant failed", "tab", p.tab, "error", err)
+			lastErr = err
 			continue
 		}
+		succeeded++
 		for _, r := range results {
 			if r.InfoHash != "" {
 				if seenHashes[r.InfoHash] {
@@ -73,6 +77,13 @@ func (p *Prowlarr) Search(ctx context.Context, query string) ([]models.SearchRes
 		}
 	}
 
+	// A variant that fails is tolerated as long as another one answered; when
+	// every variant failed, the caller must see the error rather than an empty
+	// success (which hid Prowlarr outages behind "0 results" and kept the
+	// source marked healthy).
+	if succeeded == 0 && lastErr != nil {
+		return nil, lastErr
+	}
 	return allResults, nil
 }
 

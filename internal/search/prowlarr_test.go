@@ -167,8 +167,8 @@ func TestProwlarr_DoSearchHTTPError(t *testing.T) {
 	cfg := &config.Config{ProwlarrURL: server.URL, ProwlarrAPIKey: "key"}
 	p := NewProwlarr(cfg, server.Client(), "main")
 
-	// doSearch (internal) should error, but Search() logs warnings and returns nil error
-	// when all variants fail. Let's test doSearch directly.
+	// doSearch (internal) should error; Search() surfaces it too once every
+	// variant failed (see TestProwlarr_SearchReturnsErrorWhenAllVariantsFail).
 	_, err := p.doSearch(context.Background(), prowlarrSearchParams{
 		query:      "test",
 		categories: []string{"7000"},
@@ -414,5 +414,48 @@ func TestProwlarr_TruncatedJSON(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "decode") {
 		t.Errorf("expected decode error, got: %v", err)
+	}
+}
+
+// When every query variant fails, Search must return the error instead of an
+// empty success: an empty success hid Prowlarr outages behind "0 results" and
+// kept the source marked healthy.
+func TestProwlarr_SearchReturnsErrorWhenAllVariantsFail(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	cfg := &config.Config{ProwlarrURL: server.URL, ProwlarrAPIKey: "key"}
+	for _, tab := range []string{"main", "audiobook", "manga"} {
+		p := NewProwlarr(cfg, server.Client(), tab)
+		if _, err := p.Search(context.Background(), "test"); err == nil {
+			t.Errorf("tab %s: expected an error when every variant fails", tab)
+		}
+	}
+}
+
+// One failing variant is still tolerated when another one answered.
+func TestProwlarr_SearchToleratesOneFailingVariant(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode([]prowlarrItem{{Title: "Audio Book [M4B]", DownloadURL: "http://example.com/x", Protocol: "torrent", InfoHash: "h1"}})
+	}))
+	defer server.Close()
+
+	cfg := &config.Config{ProwlarrURL: server.URL, ProwlarrAPIKey: "key"}
+	p := NewProwlarr(cfg, server.Client(), "audiobook") // two variants
+	results, err := p.Search(context.Background(), "test")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 1 || calls != 2 {
+		t.Fatalf("got %d results after %d calls, want 1 result from the second variant", len(results), calls)
 	}
 }
