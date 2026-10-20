@@ -7,6 +7,7 @@ import {
   type Author,
   type AuthorCheckResult,
   type AuthStatus,
+  type DownloadJob,
   type MediaType,
   type Profile,
   type WantedOutcome,
@@ -14,7 +15,7 @@ import {
 } from "./api";
 import { text } from "./i18n/wanted";
 import { Library } from "./Library";
-import { Downloads } from "./Downloads";
+import { Downloads, activeStatuses } from "./Downloads";
 import { AuthSettings } from "./AuthSettings";
 import { AccountSettings } from "./AccountSettings";
 import { GeneralSettings } from "./GeneralSettings";
@@ -97,6 +98,39 @@ function App(): React.JSX.Element {
     );
     return () => setUnauthorizedHandler(undefined);
   }, []);
+  // Header activity pill: a 15 s poll of /api/downloads, paused while hidden.
+  // There is no job stream server-side, so nothing here claims to be live.
+  const [activeDownloads, setActiveDownloads] = useState(0);
+  const authenticated = auth?.authenticated === true;
+  useEffect(() => {
+    if (!authenticated) return;
+    let dead = false;
+    async function poll() {
+      if (dead || document.hidden) return;
+      try {
+        const data = await api<{
+          downloads?: DownloadJob[];
+          jobs?: DownloadJob[];
+        }>("/api/downloads");
+        if (!dead)
+          setActiveDownloads(
+            (data.downloads ?? data.jobs ?? []).filter((job) =>
+              activeStatuses.has(job.status),
+            ).length,
+          );
+      } catch {
+        /* The Downloads tab reports its own errors; the pill just keeps its value. */
+      }
+    }
+    void poll();
+    const interval = window.setInterval(() => void poll(), 15000);
+    document.addEventListener("visibilitychange", poll);
+    return () => {
+      dead = true;
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", poll);
+    };
+  }, [authenticated]);
   if (auth === null)
     return (
       <main className="p-8 text-slate-200" aria-busy="true">
@@ -149,6 +183,24 @@ function App(): React.JSX.Element {
             <h1 className="text-lg font-bold text-white">Librarr</h1>
           </div>
           <div className="flex gap-3 items-center">
+            {activeDownloads > 0 && (
+              <button
+                type="button"
+                id="header-active-downloads"
+                data-action="openDownloads"
+                title={t("active_downloads_title", { n: activeDownloads })}
+                aria-label={t("active_downloads_title", { n: activeDownloads })}
+                className="inline-flex items-center gap-1 rounded-full bg-indigo-600 px-2.5 py-1 min-h-[1.75rem] text-xs font-semibold text-white hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400"
+                onClick={() => {
+                  setTab("downloads");
+                  setNavVersion((x) => x + 1);
+                  setMobileNav(false);
+                }}
+              >
+                <span aria-hidden="true">⬇</span>
+                {activeDownloads}
+              </button>
+            )}
             <select
               id="language-select"
               data-action="selectLanguage"
@@ -167,13 +219,14 @@ function App(): React.JSX.Element {
             <span id="header-role">{auth.role}</span>
             <button
               data-action="doLogout"
+              className="text-sm text-slate-300 hover:text-white"
               onClick={() =>
                 void api("/api/logout", { method: "POST" })
                   .then(() => setAuth({ ...auth, authenticated: false }))
                   .catch((e) => setNotice(String(e)))
               }
             >
-              Sign out
+              {t("sign_out")}
             </button>
           </div>
         </div>
@@ -193,6 +246,7 @@ function App(): React.JSX.Element {
                 setNavVersion((x) => x + 1);
                 setMobileNav(false);
               }}
+              aria-current={tab === item ? "page" : undefined}
               className={`nav-tab px-2 py-2 ${tab === item ? "active" : ""}`}
             >
               {t(
