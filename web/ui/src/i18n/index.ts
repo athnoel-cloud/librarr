@@ -1,10 +1,18 @@
 import { useSyncExternalStore } from "react";
 import { catalog } from "./catalog";
-export type Locale = "en" | "ru";
+export type Locale = "en" | "fr" | "ru";
+export const LOCALES: readonly Locale[] = ["en", "fr", "ru"];
 export type TranslationKey = keyof typeof catalog.en;
 const event = "librarr:language";
-const current = (): Locale =>
-  localStorage.getItem("librarr_lang") === "ru" ? "ru" : "en";
+const isLocale = (value: string | null | undefined): value is Locale =>
+  value === "en" || value === "fr" || value === "ru";
+// Explicit choice first; otherwise the browser language, English as the fallback.
+const current = (): Locale => {
+  const stored = localStorage.getItem("librarr_lang");
+  if (isLocale(stored)) return stored;
+  const browser = navigator.language?.slice(0, 2).toLowerCase();
+  return isLocale(browser) ? browser : "en";
+};
 function subscribe(listener: () => void) {
   window.addEventListener(event, listener);
   window.addEventListener("storage", listener);

@@ -18,7 +18,7 @@ import { Downloads } from "./Downloads";
 import { AuthSettings } from "./AuthSettings";
 import { AccountSettings } from "./AccountSettings";
 import { GeneralSettings } from "./GeneralSettings";
-import { useTranslation } from "./i18n";
+import { LOCALES, useTranslation, type Locale } from "./i18n";
 import { Search, type SearchIntent } from "./Search";
 import "./style.css";
 
@@ -140,12 +140,20 @@ function App(): React.JSX.Element {
             <h1 className="text-lg font-bold text-white">Librarr</h1>
           </div>
           <div className="flex gap-3 items-center">
-            <button
-              data-action="toggleLanguage"
-              onClick={() => setLanguage(locale === "en" ? "ru" : "en")}
+            <select
+              id="language-select"
+              data-action="selectLanguage"
+              aria-label="Language"
+              value={locale}
+              onChange={(e) => setLanguage(e.target.value as Locale)}
+              className="bg-slate-800 text-slate-100 border border-slate-600 rounded px-2 py-1 text-sm"
             >
-              {locale === "en" ? "RU" : "EN"}
-            </button>
+              {LOCALES.map((code) => (
+                <option key={code} value={code}>
+                  {code.toUpperCase()}
+                </option>
+              ))}
+            </select>
             <span id="header-username">{auth.username}</span>
             <span id="header-role">{auth.role}</span>
             <button

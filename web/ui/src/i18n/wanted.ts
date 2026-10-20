@@ -1,4 +1,4 @@
-export type WantedLocale = "en" | "ru";
+export type WantedLocale = "en" | "fr" | "ru";
 
 export const wantedText: Record<WantedLocale, Record<string, string>> = {
   en: {
@@ -35,6 +35,24 @@ export const wantedText: Record<WantedLocale, Record<string, string>> = {
     author_baseline: "записана база ({seen} работ)",
     author_new: "{count} новых",
     author_added: "{count} добавлено в желаемое",
+  },
+  fr: {
+    wanted_intro:
+      "Les livres que Librarr continue de chercher, et maintient à la qualité demandée par leur profil.",
+    wanted_search_now: "Rechercher maintenant",
+    wanted_explain: "Pourquoi ?",
+    wanted_monitored: "Suivi",
+    wanted_state_missing: "Manquant",
+    wanted_state_upgrade: "Remplacement souhaité",
+    wanted_state_downloading: "Téléchargement",
+    wanted_state_satisfied: "Satisfait",
+    wanted_state_unmonitored: "Non suivi",
+    dry_run: "[essai]",
+    author_checked: "{author} vérifié : {summary}",
+    author_baseline:
+      "catalogue enregistré ({seen} œuvres), les nouvelles parutions seront détectées désormais",
+    author_new: "{count} nouveautés",
+    author_added: "{count} ajoutés aux recherchés",
   },
 };
 

@@ -186,11 +186,11 @@ def test_broken_cover_falls_back_to_placeholder(ui):
 def test_language_toggle_rerenders(ui):
     page = ui["page"]
     before = page.evaluate("() => document.body.innerText.slice(0, 300)")
-    page.click('[data-action="toggleLanguage"]')
+    page.select_option('[data-action="selectLanguage"]', "fr")
     page.wait_for_timeout(400)
     after = page.evaluate("() => document.body.innerText.slice(0, 300)")
     assert before != after, "language toggle changed nothing"
-    page.click('[data-action="toggleLanguage"]')  # restore EN for later tests
+    page.select_option('[data-action="selectLanguage"]', "en")  # restore EN for later tests
     page.wait_for_timeout(300)
 
 
