@@ -20,6 +20,15 @@ import { AccountSettings } from "./AccountSettings";
 import { GeneralSettings } from "./GeneralSettings";
 import { LOCALES, useTranslation, type Locale } from "./i18n";
 import { Search, type SearchIntent } from "./Search";
+import {
+  Badge,
+  Button,
+  EmptyState,
+  ListRow,
+  PageHeader,
+  StatusBadge,
+  type Tone,
+} from "./ui";
 import "./style.css";
 
 type Tab = "search" | "library" | "downloads" | "wishlist" | "settings";
@@ -521,39 +530,57 @@ function Field({
 function WantedOutcomeTable({
   outcome,
   dryRun,
+  onClose,
 }: {
   outcome: WantedOutcome;
   dryRun: boolean;
+  onClose: () => void;
 }): React.JSX.Element {
-  const { locale } = useTranslation();
+  const { locale, t } = useTranslation();
   const decisions = outcome.decisions ?? [];
   return (
-    <div data-wanted-outcome className="mt-3 border-t border-slate-800 pt-3">
-      <p className="text-xs text-slate-300">
-        <strong>{outcome.action ?? ""}</strong> — {outcome.reason ?? ""}
-        {outcome.candidate && (
-          <span className="text-slate-400"> ({outcome.candidate})</span>
-        )}
-        {dryRun && (
-          <span className="text-slate-500"> {text(locale, "dry_run")}</span>
-        )}
-      </p>
+    <div
+      data-wanted-outcome
+      className="mt-1 border-t border-slate-800 pt-3 space-y-2"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <p className="text-sm text-slate-300">
+          <strong className="text-slate-100">{outcome.action ?? ""}</strong> —{" "}
+          {outcome.reason ?? ""}
+          {outcome.candidate && (
+            <span className="text-slate-400"> ({outcome.candidate})</span>
+          )}
+          {dryRun && (
+            <span className="text-slate-400"> {text(locale, "dry_run")}</span>
+          )}
+        </p>
+        <Button
+          size="sm"
+          variant="ghost"
+          data-action="closeWantedOutcome"
+          onClick={onClose}
+        >
+          {t("close")}
+        </Button>
+      </div>
       {decisions.length > 0 && (
-        <div className="overflow-x-auto mt-2">
+        <div className="overflow-x-auto">
           <table
-            className="text-xs w-full"
+            className="text-sm w-full"
             data-wanted-decisions={decisions.length}
           >
-            <thead className="text-slate-500">
+            <thead className="text-slate-400 text-left">
               <tr>
-                <th aria-label="Accepted"></th>
-                <th>Format</th>
-                <th>Score</th>
-                <th>Release</th>
-                <th>Decision</th>
+                <th aria-label={t("wanted_th_accepted")} className="pr-2 py-1" />
+                <th className="pr-3 py-1 font-medium">{t("wanted_th_format")}</th>
+                <th className="pr-3 py-1 font-medium">{t("wanted_th_score")}</th>
+                <th className="pr-3 py-1 font-medium">
+                  {t("wanted_th_release")}
+                </th>
+                <th className="py-1 font-medium">{t("wanted_th_decision")}</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="align-top">
               {decisions.map((decision, index) => (
                 <tr
                   key={`${decision.title ?? ""}:${decision.format ?? ""}:${index}`}
@@ -561,20 +588,27 @@ function WantedOutcomeTable({
                     decision.accepted ? "text-emerald-300" : "text-slate-400"
                   }
                 >
-                  <td>
+                  <td className="pr-2 py-1">
                     {decision.accepted ? (decision.upgrade ? "↑" : "✓") : "✗"}
                   </td>
-                  <td className="font-mono">
+                  <td className="pr-3 py-1 font-mono">
                     {(decision.format ?? "?").toUpperCase()}
                   </td>
-                  <td>{Math.round(decision.score ?? 0)}</td>
-                  <td title={decision.title ?? ""}>
+                  <td className="pr-3 py-1 tabular-nums">
+                    {Math.round(decision.score ?? 0)}
+                  </td>
+                  <td
+                    className="pr-3 py-1 whitespace-normal [overflow-wrap:anywhere]"
+                    title={decision.title ?? ""}
+                  >
                     {decision.title ?? ""}{" "}
-                    <span className="text-slate-600">
+                    <span className="text-slate-400">
                       {decision.source ?? ""}
                     </span>
                   </td>
-                  <td>{decision.reason ?? ""}</td>
+                  <td className="py-1 whitespace-normal">
+                    {decision.reason ?? ""}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -585,6 +619,24 @@ function WantedOutcomeTable({
   );
 }
 
+const wantedStates = [
+  "missing",
+  "upgrade",
+  "downloading",
+  "satisfied",
+  "unmonitored",
+] as const;
+type WantedState = (typeof wantedStates)[number];
+const isWantedState = (value: string): value is WantedState =>
+  (wantedStates as readonly string[]).includes(value);
+const wantedTone: Record<WantedState, Tone> = {
+  missing: "danger",
+  upgrade: "warn",
+  downloading: "info",
+  satisfied: "ok",
+  unmonitored: "neutral",
+};
+
 function Wanted({
   onSearch,
   admin,
@@ -594,7 +646,7 @@ function Wanted({
   onSearch: (query: string, media: MediaType) => void;
   setNotice: (s: string) => void;
 }): React.JSX.Element {
-  const { locale } = useTranslation();
+  const { locale, t } = useTranslation();
   const [items, setItems] = useState<WishlistItem[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -676,32 +728,30 @@ function Wanted({
         )
         .join(" · ")
     : text(locale, "wanted_intro");
+  const field = "grid gap-1 text-sm text-slate-300";
   return (
     <section id="tab-wishlist" className="tab-content active">
-      <div className="flex flex-wrap gap-2 items-center">
-        <h2>Wanted</h2>
-        <p id="wanted-summary">{summary}</p>
+      <PageHeader
+        title={t("wishlist_title")}
+        subtitle={<span id="wanted-summary">{summary}</span>}
+      >
         <select
           id="wanted-filter"
+          aria-label={t("wanted_filter_label")}
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         >
-          <option value="">All</option>
-          {[
-            "missing",
-            "upgrade",
-            "downloading",
-            "satisfied",
-            "unmonitored",
-          ].map((state) => (
+          <option value="">{t("wanted_filter_all")}</option>
+          {wantedStates.map((state) => (
             <option key={state} value={state}>
-              {state}
+              {t(`wanted_state_${state}`)}
             </option>
           ))}
         </select>
         {admin && (
-          <button
+          <Button
             id="wanted-search-all"
+            variant="secondary"
             data-action="runSchedulerNow"
             onClick={() =>
               void api("/api/scheduler/run?wait=1", { method: "POST" })
@@ -709,19 +759,29 @@ function Wanted({
                 .catch((e) => setNotice(String(e)))
             }
           >
-            Search all now
-          </button>
+            {t("wanted_search_all")}
+          </Button>
         )}
-        <button data-action="showWishlistForm" onClick={() => setForm(true)}>
-          Add Book
-        </button>
-      </div>
+        <Button
+          variant="primary"
+          data-action="showWishlistForm"
+          onClick={() => setForm(true)}
+        >
+          {t("wishlist_add_book")}
+        </Button>
+      </PageHeader>
       {!upgrades && items.length > 0 && (
-        <p id="wanted-upgrades-off">Automatic upgrades are off.</p>
+        <p
+          id="wanted-upgrades-off"
+          className="text-sm text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2"
+        >
+          {t("wanted_upgrades_off")}
+        </p>
       )}
       {form && (
         <form
           id="wishlist-form"
+          className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto_auto_auto] items-end"
           onSubmit={(e) => {
             e.preventDefault();
             void api("/api/wishlist", {
@@ -741,134 +801,221 @@ function Wanted({
               .catch((e) => setNotice(String(e)));
           }}
         >
-          <input
-            id="wl-title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            required
-          />
-          <input
-            id="wl-author"
-            value={author}
-            onChange={(e) => setAuthor(e.target.value)}
-          />
-          <select
-            id="wl-type"
-            value={media}
-            onChange={(e) => setMedia(e.target.value as MediaType)}
-          >
-            {(["ebook", "audiobook", "manga"] as const).map((x) => (
-              <option key={x}>{x}</option>
-            ))}
-          </select>
-          <select
-            id="wl-profile"
-            aria-label="Quality profile"
-            value={profileID}
-            onChange={(e) => setProfileID(Number(e.target.value))}
-          >
-            <option value="0">Default profile</option>
-            {profiles
-              .filter((p) => p.media_type === media)
-              .map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
+          <label className={field}>
+            <span>{t("ph_wishlist_title")}</span>
+            <input
+              id="wl-title"
+              placeholder={t("ph_wishlist_title")}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+            />
+          </label>
+          <label className={field}>
+            <span>{t("ph_wishlist_author")}</span>
+            <input
+              id="wl-author"
+              placeholder={t("ph_wishlist_author")}
+              value={author}
+              onChange={(e) => setAuthor(e.target.value)}
+            />
+          </label>
+          <label className={field}>
+            <span>{t("wanted_label_type")}</span>
+            <select
+              id="wl-type"
+              value={media}
+              onChange={(e) => setMedia(e.target.value as MediaType)}
+            >
+              {(["ebook", "audiobook", "manga"] as const).map((x) => (
+                <option key={x} value={x}>
+                  {t(`opt_${x}`)}
                 </option>
               ))}
-          </select>
-          <button data-action="addWishlistItem">Add</button>
-          <button type="button" onClick={() => setForm(false)}>
-            Cancel
-          </button>
-        </form>
-      )}
-      {!items.length && (
-        <p id="wishlist-empty" className="p-8 text-center">
-          {text(locale, "wanted_intro")}
-        </p>
-      )}
-      <div id="wishlist-list">
-        {shown.map((item) => (
-          <article
-            key={item.id}
-            data-wanted-id={item.id}
-            className="bg-slate-900 p-3"
-          >
-            <h4>{item.title}</h4>
-            <span data-wanted-state={item.state ?? "missing"}>
-              {item.state ?? "missing"}
-            </span>
-            {item.current_format && (
-              <span>{item.current_format.toUpperCase()} on disk</span>
-            )}
-            <p title={item.last_result}>{item.last_result}</p>
-            <label>
-              <input
-                data-action-change="toggleWantedMonitored"
-                type="checkbox"
-                checked={item.monitored ?? true}
-                onChange={(e) =>
-                  void patch(item.id, { monitored: e.target.checked })
-                }
-              />
-              Monitored
-            </label>
+            </select>
+          </label>
+          <label className={field}>
+            <span>{t("wanted_label_profile")}</span>
             <select
-              data-action-change="setWantedProfile"
-              value={item.quality_profile_id ?? 0}
-              onChange={(e) =>
-                void patch(item.id, {
-                  quality_profile_id: Number(e.target.value),
-                })
-              }
+              id="wl-profile"
+              value={profileID}
+              onChange={(e) => setProfileID(Number(e.target.value))}
             >
-              <option value="0">Default profile</option>
+              <option value="0">{t("wanted_profile_default")}</option>
               {profiles
-                .filter((p) => p.media_type === item.media_type)
+                .filter((p) => p.media_type === media)
                 .map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
                   </option>
                 ))}
             </select>
-            <button
+          </label>
+          <div className="flex gap-2">
+            <Button type="submit" variant="primary" data-action="addWishlistItem">
+              {t("add")}
+            </Button>
+            <Button variant="ghost" onClick={() => setForm(false)}>
+              {t("cancel")}
+            </Button>
+          </div>
+        </form>
+      )}
+      {!items.length && (
+        <EmptyState
+          id="wishlist-empty"
+          title={t("wishlist_empty")}
+          hint={text(locale, "wanted_intro")}
+        />
+      )}
+      <div id="wishlist-list">
+        {shown.map((item) => {
+          const raw = item.state ?? "missing";
+          const state = isWantedState(raw) ? raw : undefined;
+          const detail = details[item.id];
+          const manual = (
+            <Button
+              size="sm"
+              variant={admin ? "ghost" : "primary"}
               data-action="searchWishlistItem"
               onClick={() => onSearch(item.title, item.media_type)}
             >
-              Search
-            </button>
-            {admin && (
-              <>
-                <button
-                  data-action="searchWantedNow"
-                  onClick={() => void run(item.id, false)}
+              {t("wanted_search_manual")}
+            </Button>
+          );
+          return (
+            <ListRow
+              key={item.id}
+              data-wanted-id={item.id}
+              className="p-4"
+              leading={
+                <StatusBadge
+                  tone={state ? wantedTone[state] : "neutral"}
+                  pulse={state === "downloading"}
+                  data-wanted-state={raw}
                 >
-                  Search now
-                </button>
-                <button
-                  data-action="explainWanted"
-                  onClick={() => void run(item.id, true)}
-                >
-                  Why?
-                </button>
-              </>
-            )}
-            <button
-              data-action="deleteWishlistItem"
-              onClick={() =>
-                void api(`/api/wishlist/${item.id}`, { method: "DELETE" })
-                  .then(load)
-                  .catch((e) => setNotice(String(e)))
+                  {state ? t(`wanted_state_${state}`) : raw}
+                </StatusBadge>
+              }
+              actions={
+                <>
+                  {admin && (
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      data-action="searchWantedNow"
+                      onClick={() => void run(item.id, false)}
+                    >
+                      {t("wanted_search_now")}
+                    </Button>
+                  )}
+                  {manual}
+                  {admin && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      data-action="explainWanted"
+                      onClick={() => void run(item.id, true)}
+                    >
+                      {t("wanted_explain")}
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    data-action="deleteWishlistItem"
+                    className="ml-auto sm:ml-2"
+                    onClick={() => {
+                      if (
+                        !window.confirm(
+                          t("wanted_confirm_delete", { title: item.title }),
+                        )
+                      )
+                        return;
+                      void api(`/api/wishlist/${item.id}`, {
+                        method: "DELETE",
+                      })
+                        .then(load)
+                        .catch((e) => setNotice(String(e)));
+                    }}
+                  >
+                    {t("delete")}
+                  </Button>
+                </>
+              }
+              footer={
+                detail ? (
+                  <WantedOutcomeTable
+                    {...detail}
+                    onClose={() =>
+                      setDetails((previous) => {
+                        const next = { ...previous };
+                        delete next[item.id];
+                        return next;
+                      })
+                    }
+                  />
+                ) : undefined
               }
             >
-              Delete
-            </button>
-            {(() => {
-              const detail = details[item.id];
-              return detail ? <WantedOutcomeTable {...detail} /> : null;
-            })()}
-          </article>
-        ))}
+              <h4 className="text-sm font-semibold text-white [overflow-wrap:anywhere]">
+                {item.title}
+              </h4>
+              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-400">
+                {item.author && <span>{item.author}</span>}
+                {item.current_format && (
+                  <Badge tone="format">
+                    {t("wanted_on_disk", {
+                      format: item.current_format.toUpperCase(),
+                    })}
+                  </Badge>
+                )}
+                <label className="inline-flex items-center gap-1.5 text-slate-300">
+                  <input
+                    data-action-change="toggleWantedMonitored"
+                    type="checkbox"
+                    checked={item.monitored ?? true}
+                    onChange={(e) =>
+                      void patch(item.id, { monitored: e.target.checked })
+                    }
+                  />
+                  {t("wanted_monitored")}
+                </label>
+                <select
+                  data-action-change="setWantedProfile"
+                  aria-label={t("wanted_label_profile")}
+                  value={item.quality_profile_id ?? 0}
+                  onChange={(e) =>
+                    void patch(item.id, {
+                      quality_profile_id: Number(e.target.value),
+                    })
+                  }
+                >
+                  <option value="0">
+                    {!item.quality_profile_id && item.profile_name
+                      ? item.profile_name
+                      : t("wanted_profile_default")}
+                  </option>
+                  {profiles
+                    .filter((p) => p.media_type === item.media_type)
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              {item.last_result && (
+                <p
+                  className="mt-1 text-sm text-slate-300"
+                  title={item.last_result}
+                >
+                  {t("wanted_last", { result: item.last_result })}
+                </p>
+              )}
+            </ListRow>
+          );
+        })}
       </div>
     </section>
   );

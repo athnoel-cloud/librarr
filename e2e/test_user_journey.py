@@ -164,9 +164,10 @@ def test_wishlist_add_search_delete(ui):
     page.wait_for_timeout(400)
     assert active_tab(page) == "tab-search"
 
-    # Delete removes the row.
+    # Delete asks for confirmation, then removes the row.
     page.click('[data-action="switchTab"][data-arg="wishlist"]')
     page.wait_for_timeout(200)
+    page.once("dialog", lambda d: d.accept())
     page.click('[data-action="deleteWishlistItem"]')
     page.wait_for_timeout(500)
     assert page.locator('[data-action="deleteWishlistItem"]').count() == 0
