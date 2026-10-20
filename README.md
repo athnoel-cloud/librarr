@@ -233,7 +233,8 @@ behind TLS.
 | `OIDC_AUTO_CREATE_USERS` | `true` | Auto-create users on first OIDC login |
 | `OIDC_DEFAULT_ROLE` | `user` | Default role for OIDC-created users |
 | `OIDC_PROXY_HEADERS_ENABLED` | `false` | Trust Authentik identity headers from a reverse proxy |
-| `LIBRARR_TRUSTED_PROXIES` | | Comma-separated IPs/CIDRs of your reverse proxy. **Required for `OIDC_PROXY_HEADERS_ENABLED`**; also gates `X-Forwarded-Proto` |
+| `LIBRARR_TRUSTED_PROXIES` | | Comma-separated IPs/CIDRs of your reverse proxy. **Required for `OIDC_PROXY_HEADERS_ENABLED`**; also gates `X-Forwarded-Proto` and `X-Forwarded-For` (rate limiting) |
+| `LIBRARR_SECURE_COOKIES` | `false` | Force the `Secure` flag on the session cookie, for a TLS-terminating tunnel (cloudflared, Tailscale Funnel) that is not declared in `LIBRARR_TRUSTED_PROXIES` |
 
 When `OIDC_PROXY_HEADERS_ENABLED=true` and Librarr sits behind a trusted reverse
 proxy that injects Authentik headers like `X-Authentik-Username`, it will treat
@@ -350,7 +351,9 @@ which requires Transmission 3.0+).
 | `IMPORT_MODE` | (automatic) | How organized files reach the library: `move` (the download payload is consumed), `hardlink` (a second name for the same data — keeps seeding, no extra disk, same filesystem only), or `copy` (keeps seeding, uses twice the disk). Leave it unset and it follows `REMOVE_TORRENT_AFTER_IMPORT`: removing torrents moves, keeping them hardlinks. See [Seeding after import](#seeding-after-import). |
 | `EBOOK_DIR` | `/books/ebooks` | Organized ebook destination |
 | `AUDIOBOOK_DIR` | `/books/audiobooks` | Organized audiobook destination |
-| `MANGA_DIR` | `/books/manga` | Organized manga destination |
+| `MANGA_DIR` | `/books/manga` | Organized manga destination (new series) |
+| `MANGA_LIBRARY_ROOTS` | | Comma-separated directories (as seen by Librarr) that already hold manga series. A new volume is placed in the existing series directory when one of the roots has it — readers such as Kavita keep a series in a single folder — otherwise under `MANGA_DIR/{series}` |
+| `MANGA_FILE_PATTERN` | `{series} - Vol. {volume:02}.{ext}` | File name for a volume whose number was recognised (`T21`, `Tome 21`, `Vol. 21`, `v21`, `#21`, trailing number); tokens `{series}`, `{volume}`, `{volume:02}`, `{volume:03}`, `{ext}`. Empty keeps original names |
 | `INCOMING_DIR` | `/data/incoming` | Incoming file staging directory as seen by Librarr; qBittorrent paths beneath `QB_SAVE_PATH` are translated here before import |
 | `MANGA_INCOMING_DIR` | `/data/manga-incoming` | Manga incoming staging directory |
 
@@ -442,7 +445,7 @@ Legacy per-source env vars (e.g. `PROWLARR_URL` and other per-driver overrides) 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `RATE_LIMIT_ENABLED` | `true` | Per-source rate limiting |
-| `METRICS_ENABLED` | `true` | Prometheus metrics endpoint |
+| `METRICS_ENABLED` | `true` | Prometheus metrics endpoint (requires the `API_KEY` via `X-Api-Key` or `?apikey=` when one is configured) |
 | `WEBNOVEL_ENABLED` | `true` | Web novel search (requires lncrawl container) |
 | `WISHLIST_CLEANUP_ENABLED` | `false` | Periodically remove wishlist items already found in the library |
 | `WISHLIST_CLEANUP_INTERVAL_HOURS` | `12` | Hours between wishlist cleanup scans |
@@ -464,6 +467,9 @@ values saved there persist in `settings.json` and override the environment.
 | `SCHEDULER_INTERVAL_HOURS` | `24` | Hours between passes |
 | `SCHEDULER_AUTO_DOWNLOAD` | `false` | Grab the best acceptable release (otherwise only notify) |
 | `SCHEDULER_MIN_SCORE` | `70` | Minimum match confidence (0-100); the profile ranks what passes |
+| `LANGUAGE_PREFERRED` | | Comma-separated language codes the scheduler prefers (`fr`, `en`, `multi`, `de`, `es`, `it`, `ru`, `ja`). Every result gets a `language` read from the release name tags (`FRENCH`, `VFF`, `MULTi`, `ENGLISH`, …); untagged releases stay unknown and are never penalised |
+| `LANGUAGE_MODE` | `prefer` | `prefer`: a preferred language adds `LANGUAGE_BONUS` to the score (format rank still comes first, as in Radarr). `require`: a release tagged with another language is rejected ("language en") |
+| `LANGUAGE_BONUS` | `30` | Score bonus for a preferred language |
 | `SCHEDULER_ITEM_DELAY_SECONDS` | `5` | Pause between two items that hit the sources |
 | `AUTO_UPGRADE_ENABLED` | `false` | Global switch: replace an existing file when a better-ranked format appears (each profile also has its own flag) |
 | `UPGRADE_KEEP_OLD_FILES` | `false` | Keep the superseded file and its library row after an upgrade instead of deleting it |
@@ -472,7 +478,7 @@ values saved there persist in `settings.json` and override the environment.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `TORZNAB_API_KEY` | | API key for the Torznab endpoint |
+| `TORZNAB_API_KEY` | | API key for the Torznab endpoint. Required (the endpoint answers 401) as soon as `AUTH_USERNAME` or `API_KEY` is configured, so an authenticated instance never exposes an anonymous search proxy |
 
 ## API Endpoints
 

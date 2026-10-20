@@ -435,6 +435,14 @@ func (w *Watcher) organizerFor(source string) *organize.Organizer {
 func (w *Watcher) importEbook(t TorrentInfo, savePath, source string) (bool, error) {
 	bookFiles := findFilesByExt(savePath, []string{".epub", ".mobi", ".pdf", ".azw3"})
 	if len(bookFiles) == 0 {
+		// Prowlarr's book categories include comics, so a .cbz/.cbr can be
+		// grabbed from the ebook tab. It would otherwise stay "pending"
+		// forever (re-checked every poll, never surfaced): hand it to the
+		// manga importer, the only pipeline that knows what to do with it.
+		if comics := findFilesByExt(savePath, []string{".cbz", ".cbr"}); len(comics) > 0 {
+			slog.Info("comic archive grabbed as ebook, importing as manga", "name", t.Name, "files", len(comics))
+			return w.importManga(t, savePath, source)
+		}
 		return false, fmt.Errorf("%w: no ebook files found at %s", errTorrentContentPending, savePath)
 	}
 
@@ -539,7 +547,7 @@ func (w *Watcher) importManga(t TorrentInfo, savePath, source string) (bool, err
 		}
 
 		if inserted && w.targets != nil {
-			w.targets.ImportManga(destPath, t.Name)
+			w.targets.ImportManga(destPath, organize.MangaSeriesName(t.Name))
 		}
 	}
 

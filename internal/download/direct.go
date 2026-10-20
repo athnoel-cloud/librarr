@@ -385,6 +385,10 @@ func (d *DirectDownloader) downloadFileWithClientAndUserAgent(client *http.Clien
 // exhausted and the download job wedges.
 const maxDownloadHops = 5
 
+// maxDirectDownloadBytes caps a single direct (non-torrent) download so a
+// misbehaving source cannot fill the incoming volume.
+const maxDirectDownloadBytes = 2 << 30
+
 func (d *DirectDownloader) downloadFileAttempt(client *http.Client, fileURL, title string, progressFn func(string), allowChallenge bool, userAgent string, depth int) (string, int64, error) {
 	if depth > maxDownloadHops {
 		return "", 0, fmt.Errorf("too many download hops (exceeded %d): mirror kept returning HTML instead of a file", maxDownloadHops)
@@ -471,8 +475,13 @@ func (d *DirectDownloader) downloadFileAttempt(client *http.Client, fileURL, tit
 		return "", 0, fmt.Errorf("create file: %w", err)
 	}
 
-	written, err := io.Copy(f, resp.Body)
+	// A source that never stops sending (or a mislabeled multi-gigabyte
+	// payload) must not fill the incoming volume: stop one byte past the cap.
+	written, err := io.Copy(f, io.LimitReader(resp.Body, maxDirectDownloadBytes+1))
 	f.Close()
+	if err == nil && written > maxDirectDownloadBytes {
+		err = fmt.Errorf("download exceeds %d bytes", maxDirectDownloadBytes)
+	}
 	if err != nil {
 		os.Remove(filePath)
 		return "", 0, fmt.Errorf("write file: %w", err)

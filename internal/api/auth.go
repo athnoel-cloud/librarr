@@ -2,6 +2,7 @@ package api
 
 import (
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"log/slog"
@@ -113,7 +114,9 @@ func handleLogin(cfg *config.Config, database *db.DB, sessions *SessionStore) ht
 			return
 		}
 
-		if req.Username != cfg.AuthUsername || req.Password != cfg.AuthPassword {
+		userOK := subtle.ConstantTimeCompare([]byte(req.Username), []byte(cfg.AuthUsername))
+		passOK := subtle.ConstantTimeCompare([]byte(req.Password), []byte(cfg.AuthPassword))
+		if userOK&passOK != 1 {
 			writeJSON(w, http.StatusUnauthorized, map[string]interface{}{
 				"success": false,
 				"error":   "Invalid credentials",
@@ -231,7 +234,34 @@ func handleLoginTOTP(database *db.DB, sessions *SessionStore) http.HandlerFunc {
 // First user becomes admin. After that, registration requires either:
 //   - An admin session (admin creating users directly), OR
 //   - A valid invite code (self-registration with a code the admin shared).
-func handleRegister(database *db.DB, sessions *SessionStore) http.HandlerFunc {
+//
+// callerIsAdmin reports whether a request on an auth-exempt path still carries
+// an admin identity: a role set by the middleware, a valid API key, or an
+// admin session cookie.
+func callerIsAdmin(r *http.Request, cfg *config.Config, sessions *SessionStore) bool {
+	if role, _ := r.Context().Value(ctxUserRole).(string); role == "admin" {
+		return true
+	}
+	if cfg != nil && cfg.HasAPIKey() {
+		key := r.Header.Get("X-Api-Key")
+		if key == "" {
+			key = r.URL.Query().Get("apikey")
+		}
+		if key != "" && subtle.ConstantTimeCompare([]byte(key), []byte(cfg.APIKey)) == 1 {
+			return true
+		}
+	}
+	if sessions != nil {
+		if cookie, err := r.Cookie("librarr_session"); err == nil {
+			if data, ok := sessions.Get(cookie.Value); ok && data.Role == "admin" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func handleRegister(cfg *config.Config, database *db.DB, sessions *SessionStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Username   string `json:"username"`
@@ -267,6 +297,20 @@ func handleRegister(database *db.DB, sessions *SessionStore) http.HandlerFunc {
 		role := "user"
 		if isFirstUser {
 			role = "admin"
+		}
+
+		// Bootstrap (first registered user becomes admin) exists for instances
+		// that have no authentication yet. When AUTH_USERNAME/AUTH_PASSWORD or
+		// API_KEY is configured the operator is already authenticated another
+		// way, and since /api/register is an auth-exempt path, anyone able to
+		// reach the port could otherwise become admin and lock the operator
+		// out (the legacy login stops working as soon as a user exists).
+		if isFirstUser && cfg != nil && (cfg.HasAuth() || cfg.HasAPIKey()) && !callerIsAdmin(r, cfg, sessions) {
+			writeJSON(w, http.StatusForbidden, map[string]interface{}{
+				"success": false,
+				"error":   "Registration is disabled while AUTH_USERNAME or API_KEY auth is configured; sign in first",
+			})
+			return
 		}
 
 		// After first user, require either admin session or valid invite code.

@@ -224,6 +224,13 @@ func (m *Manager) processResults(results []models.SearchResult, query, author st
 	results = FilterResults(results, query, m.ForeignLangFilterEnabled())
 	results = FilterAndSortResults(results, query, m.cfg.MinTorrentSizeBytes, m.cfg.MaxTorrentSizeBytes)
 	results = ScoreResults(results, query, author)
+	// Direct sources report a language; indexer releases only carry it as a
+	// tag in their name. Fill it so the UI and the scheduler see one field.
+	for i := range results {
+		if results[i].Language == "" {
+			results[i].Language, _ = DetectLanguage(results[i].Title)
+		}
+	}
 	for i := 0; i < len(results); i++ {
 		for j := i + 1; j < len(results); j++ {
 			if results[j].Score > results[i].Score {

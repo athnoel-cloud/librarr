@@ -45,6 +45,13 @@ type Config struct {
 	MangaDir         string
 	IncomingDir      string
 	MangaIncomingDir string
+	// MangaLibraryRoots are extra directories (as seen by Librarr) that hold
+	// manga series; a new volume is placed next to its series when one of
+	// them already has it, otherwise under MangaDir.
+	MangaLibraryRoots []string
+	// MangaFilePattern names a volume whose number was recognised:
+	// {series}, {volume}, {volume:02}, {volume:03}, {ext}.
+	MangaFilePattern string
 
 	// Torznab
 	TorznabAPIKey string
@@ -143,6 +150,12 @@ type Config struct {
 
 	// Search filtering
 	ForeignLangFilter bool // filter out non-English titles (default: true for backward compat)
+	// LanguagePreferred lists language codes (fr, en, multi...) the scheduler
+	// prefers; LanguageMode is "prefer" (score bonus) or "require" (a release
+	// tagged with another language is rejected; untagged releases pass).
+	LanguagePreferred []string
+	LanguageMode      string
+	LanguageBonus     float64
 
 	// Feature toggles
 	RateLimitEnabled bool
@@ -319,12 +332,14 @@ func buildFromEnv() *Config {
 		ProwlarrURL:    getEnv("PROWLARR_URL", ""),
 		ProwlarrAPIKey: getEnv("PROWLARR_API_KEY", ""),
 
-		FileOrgEnabled:   getEnvBool("FILE_ORG_ENABLED", true),
-		EbookDir:         getEnv("EBOOK_DIR", "/books/ebooks"),
-		AudiobookDir:     getEnv("AUDIOBOOK_DIR", "/books/audiobooks"),
-		MangaDir:         getEnv("MANGA_DIR", "/books/manga"),
-		IncomingDir:      getEnv("INCOMING_DIR", "/data/incoming"),
-		MangaIncomingDir: getEnv("MANGA_INCOMING_DIR", "/data/manga-incoming"),
+		FileOrgEnabled:    getEnvBool("FILE_ORG_ENABLED", true),
+		EbookDir:          getEnv("EBOOK_DIR", "/books/ebooks"),
+		AudiobookDir:      getEnv("AUDIOBOOK_DIR", "/books/audiobooks"),
+		MangaDir:          getEnv("MANGA_DIR", "/books/manga"),
+		IncomingDir:       getEnv("INCOMING_DIR", "/data/incoming"),
+		MangaIncomingDir:  getEnv("MANGA_INCOMING_DIR", "/data/manga-incoming"),
+		MangaLibraryRoots: splitCSV(getEnv("MANGA_LIBRARY_ROOTS", "")),
+		MangaFilePattern:  getEnv("MANGA_FILE_PATTERN", "{series} - Vol. {volume:02}.{ext}"),
 
 		TorznabAPIKey: getEnv("TORZNAB_API_KEY", ""),
 
@@ -399,6 +414,9 @@ func buildFromEnv() *Config {
 		BookTrackerEnabled: getEnvBool("BOOKTRACKER_ENABLED", false),
 
 		ForeignLangFilter: getEnvBool("FOREIGN_LANG_FILTER", true),
+		LanguagePreferred: splitCSV(strings.ToLower(getEnv("LANGUAGE_PREFERRED", ""))),
+		LanguageMode:      strings.ToLower(getEnv("LANGUAGE_MODE", "prefer")),
+		LanguageBonus:     float64(getEnvInt("LANGUAGE_BONUS", 30)),
 
 		LNCrawlContainer: getEnv("LNCRAWL_CONTAINER", ""),
 

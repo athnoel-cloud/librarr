@@ -118,6 +118,9 @@ func (s *Server) handleListBackups(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
+	// ParseMultipartForm's argument caps memory, not the request body (the
+	// rest spills to temp files): cap the body itself.
+	r.Body = http.MaxBytesReader(w, r.Body, 50<<20)
 	if err := r.ParseMultipartForm(50 << 20); err != nil { // 50MB max
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"success": false, "error": "Failed to parse upload: " + err.Error(),
