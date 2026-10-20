@@ -1,8 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type DownloadJob } from "./api";
 import { useTranslation, type TranslationKey } from "./i18n";
+import {
+  Button,
+  EmptyState,
+  PageHeader,
+  StatusBadge,
+  type Tone,
+} from "./ui";
 
-const active = new Set([
+// Shared with the header indicator in main.tsx.
+export const activeStatuses = new Set([
   "queued",
   "searching",
   "downloading",
@@ -21,6 +29,16 @@ const labels: Record<string, string> = {
   error: "Error",
   dead_letter: "Dead Letter",
 };
+const tone = (status: string): Tone =>
+  status === "completed"
+    ? "ok"
+    : status === "error" || status === "dead_letter"
+      ? "danger"
+      : status === "retry_wait"
+        ? "warn"
+        : activeStatuses.has(status)
+          ? "info"
+          : "neutral";
 
 export function Downloads({
   setNotice,
@@ -80,13 +98,21 @@ export function Downloads({
       : job.job_id
         ? `/api/downloads/novel/${job.job_id}`
         : "";
-    if (!path || !window.confirm(`Cancel "${job.title || "Unknown"}"?`)) return;
+    if (
+      !path ||
+      !window.confirm(
+        t("confirm_cancel_download", {
+          title: job.title || t("unknown_title"),
+        }),
+      )
+    )
+      return;
     try {
       await api(path, { method: "DELETE" });
-      setNotice("Download cancelled");
+      setNotice(t("download_cancelled"));
       await load();
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Cancel failed");
+      setNotice(error instanceof Error ? error.message : t("cancel_failed"));
     }
   };
   const clear = async () => {
@@ -101,41 +127,53 @@ export function Downloads({
       setClearing(false);
     }
   };
+  const running = jobs.filter((job) => activeStatuses.has(job.status)).length;
   return (
-    <section id="tab-downloads" className="tab-content active">
-      <div className="flex justify-between">
-        <h2>
-          {t("downloads_title")}{" "}
-          <span id="dl-badge">
-            {jobs.filter((job) => active.has(job.status)).length || ""}
-          </span>
-        </h2>
-        <div>
-          <button
-            id="downloads-refresh-btn"
-            data-action="refreshDownloads"
-            disabled={refreshing}
-            aria-busy={refreshing || undefined}
-            onClick={() => void load(true)}
-          >
-            {t("refresh")}
-          </button>
-          <button
-            id="downloads-clear-btn"
-            data-action="clearCompleted"
-            disabled={clearing}
-            aria-busy={clearing || undefined}
-            onClick={() => void clear()}
-          >
-            {t("clear_completed")}
-          </button>
-        </div>
-      </div>
+    <section id="tab-downloads" className="tab-content active space-y-4">
+      <PageHeader
+        title={
+          <>
+            {t("downloads_title")}
+            <span
+              id="dl-badge"
+              className={
+                running
+                  ? "inline-flex items-center rounded-full bg-indigo-600 px-2 py-0.5 text-xs font-semibold text-white"
+                  : ""
+              }
+            >
+              {running || ""}
+            </span>
+          </>
+        }
+      >
+        <Button
+          id="downloads-refresh-btn"
+          variant="secondary"
+          data-action="refreshDownloads"
+          disabled={refreshing}
+          aria-busy={refreshing || undefined}
+          onClick={() => void load(true)}
+        >
+          {t("refresh")}
+        </Button>
+        <Button
+          id="downloads-clear-btn"
+          variant="secondary"
+          data-action="clearCompleted"
+          disabled={clearing}
+          aria-busy={clearing || undefined}
+          onClick={() => void clear()}
+        >
+          {t("clear_completed")}
+        </Button>
+      </PageHeader>
       {jobs.length === 0 && (
-        <div id="downloads-empty">
-          <h2>{t("no_active_downloads")}</h2>
-          <p>{t("no_downloads_hint")}</p>
-        </div>
+        <EmptyState
+          id="downloads-empty"
+          title={t("no_active_downloads")}
+          hint={t("no_downloads_hint")}
+        />
       )}
       <div id="downloads-list" className="space-y-3">
         {jobs.map((job, index) => {
@@ -146,62 +184,94 @@ export function Downloads({
             <article
               data-download-id={id}
               key={id}
-              className="bg-slate-900 border rounded-xl p-4"
+              className="bg-slate-900 border border-slate-700 rounded-xl p-4 space-y-2"
             >
-              <span data-download-status={job.status}>
-                {job.status in labels
-                  ? t(`status_${job.status}` as TranslationKey)
-                  : job.status}
-              </span>
-              {job.source && <span>{job.source}</span>}
-              <h4 title={job.title ?? ""}>{job.title || "Unknown"}</h4>
-              {job.detail && <p title={job.detail}>{job.detail}</p>}
-              {(job.max_retries ?? 0) > 0 && (job.retry_count ?? 0) > 0 && (
-                <p>
-                  Attempt{" "}
-                  {Math.min(
-                    (job.retry_count ?? 0) + 1,
-                    (job.max_retries ?? 0) + 1,
-                  )}
-                  /{(job.max_retries ?? 0) + 1}
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusBadge
+                  tone={tone(job.status)}
+                  pulse={job.status === "downloading"}
+                  data-download-status={job.status}
+                >
+                  {job.status in labels
+                    ? t(`status_${job.status}` as TranslationKey)
+                    : job.status}
+                </StatusBadge>
+                {job.source && (
+                  <span className="text-sm text-slate-400">{job.source}</span>
+                )}
+              </div>
+              <h4
+                title={job.title ?? ""}
+                className="text-sm font-medium text-slate-100 [overflow-wrap:anywhere]"
+              >
+                {job.title || t("unknown_title")}
+              </h4>
+              <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-slate-400">
+                {job.detail && <span title={job.detail}>{job.detail}</span>}
+                {(job.max_retries ?? 0) > 0 && (job.retry_count ?? 0) > 0 && (
+                  <span>
+                    {t("attempt_of", {
+                      n: Math.min(
+                        (job.retry_count ?? 0) + 1,
+                        (job.max_retries ?? 0) + 1,
+                      ),
+                      m: (job.max_retries ?? 0) + 1,
+                    })}
+                  </span>
+                )}
+                {job.size && <span>{job.size}</span>}
+                {job.speed && <span>{job.speed}</span>}
+              </div>
+              {job.error && (
+                <p className="text-sm text-red-300 [overflow-wrap:anywhere]">
+                  {job.error}
                 </p>
               )}
-              {job.error && <p className="text-red-400">{job.error}</p>}
               {job.status === "downloading" && progress > 0 && (
-                <>
+                <div className="flex items-center gap-3">
                   <div
                     role="progressbar"
                     aria-valuenow={progress}
                     aria-valuemin={0}
                     aria-valuemax={100}
+                    className="flex-1 h-2 rounded-full bg-slate-800 overflow-hidden"
                   >
                     <div
-                      className="progress-bar"
+                      className="progress-bar h-full rounded-full bg-indigo-500"
                       style={{ width: `${progress}%` }}
                     />
                   </div>
-                  <span>{progress.toFixed(1)}%</span>
-                </>
+                  <span className="text-sm text-slate-300 tabular-nums">
+                    {progress.toFixed(1)}%
+                  </span>
+                </div>
               )}
-              {job.size && <span>{job.size}</span>}
-              {job.speed && <span>{job.speed}</span>}
-              {(job.status === "error" || job.status === "dead_letter") && (
-                <button
-                  data-action="retryDownload"
-                  disabled={retrying}
-                  aria-busy={retrying || undefined}
-                  onClick={() => void retry(job)}
-                >
-                  {retrying ? "Loading…" : t("retry")}
-                </button>
-              )}
-              {active.has(job.status) && (job.hash || job.job_id) && (
-                <button
-                  data-action="cancelDownload"
-                  onClick={() => void cancel(job)}
-                >
-                  {t("cancel")}
-                </button>
+              {((job.status === "error" || job.status === "dead_letter") ||
+                (activeStatuses.has(job.status) && (job.hash || job.job_id))) && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {(job.status === "error" || job.status === "dead_letter") && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      data-action="retryDownload"
+                      disabled={retrying}
+                      aria-busy={retrying || undefined}
+                      onClick={() => void retry(job)}
+                    >
+                      {retrying ? t("loading") : t("retry")}
+                    </Button>
+                  )}
+                  {activeStatuses.has(job.status) && (job.hash || job.job_id) && (
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      data-action="cancelDownload"
+                      onClick={() => void cancel(job)}
+                    >
+                      {t("cancel")}
+                    </Button>
+                  )}
+                </div>
               )}
             </article>
           );

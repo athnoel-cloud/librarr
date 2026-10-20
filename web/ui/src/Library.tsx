@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, type LibraryItem, type LibraryResponse } from "./api";
 import { useTranslation } from "./i18n";
+import { EmptyState } from "./ui";
 
 type Category = "ebooks" | "audiobooks" | "manga";
 const endpoints: Record<Category, string> = {
@@ -8,6 +9,8 @@ const endpoints: Record<Category, string> = {
   audiobooks: "/api/library/audiobooks",
   manga: "/api/library/manga",
 };
+const pageButton =
+  "min-w-[2.25rem] px-3 py-1.5 rounded-lg text-sm bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed aria-[current=page]:bg-indigo-600 aria-[current=page]:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400";
 const gradients = [
   "from-indigo-600 to-purple-700",
   "from-blue-600 to-cyan-700",
@@ -101,7 +104,7 @@ function Card({
   const format =
     item.file_format || item.format || item.file_path?.match(/\.([^./\\]+)$/)?.[1] || "";
   return (
-    <article className="book-card bg-slate-900 rounded-xl overflow-hidden border border-slate-800 relative group">
+    <article className="book-card bg-slate-900 rounded-xl overflow-hidden border border-slate-700 relative group">
       <Cover item={item} index={index} />
       {item.id != null && !item.kavita_url && (
         <button
@@ -115,15 +118,17 @@ function Card({
           ✕
         </button>
       )}
-      <div className="p-3">
-        <h3 className="text-sm font-semibold text-white">{title}</h3>
+      <div className="p-3 space-y-0.5">
+        <h3 className="text-sm font-semibold text-white [overflow-wrap:anywhere]">
+          {title}
+        </h3>
         {item.author && (
-          <p className="text-xs text-slate-400">{item.author}</p>
+          <p className="text-sm text-slate-400">{item.author}</p>
         )}
         {item.series && (
-          <p className="text-xs text-indigo-400">{item.series}</p>
+          <p className="text-sm text-indigo-400">{item.series}</p>
         )}
-        <div className="flex gap-2 text-xs text-slate-500">
+        <div className="flex flex-wrap gap-x-2 text-sm text-slate-400">
           {Boolean(format || item.file_size || item.size) && (
             <>
               <span className="uppercase">{format}</span>
@@ -152,12 +157,22 @@ function Card({
           )}
         </div>
         {item.abs_url && (
-          <a href={item.abs_url} target="_blank" rel="noreferrer">
+          <a
+            className="block text-sm text-indigo-300 hover:underline"
+            href={item.abs_url}
+            target="_blank"
+            rel="noreferrer"
+          >
             {t("open_in_abs")}
           </a>
         )}
         {item.kavita_url && (
-          <a href={item.kavita_url} target="_blank" rel="noreferrer">
+          <a
+            className="block text-sm text-indigo-300 hover:underline"
+            href={item.kavita_url}
+            target="_blank"
+            rel="noreferrer"
+          >
             {t("open_in_kavita")}
           </a>
         )}
@@ -303,12 +318,17 @@ export function Library({
           onChange={(event) => setQuery(event.target.value)}
         />
       </div>
-      {loading && <p aria-busy="true">Loading…</p>}{" "}
+      {loading && (
+        <p aria-busy="true" className="text-sm text-slate-400">
+          {t("loading")}
+        </p>
+      )}
       {!loading && items.length === 0 && (
-        <div id="library-empty">
-          <h2>{t("library_empty")}</h2>
-          <p>{t("library_empty_hint")}</p>
-        </div>
+        <EmptyState
+          id="library-empty"
+          title={t("library_empty")}
+          hint={t("library_empty_hint")}
+        />
       )}
       <div
         id="library-results"
@@ -317,22 +337,31 @@ export function Library({
         {!loading && grouped.groups.map(([series, group]) => (
           <section data-series-group={series} className="contents" key={series}>
             {group.length > 1 && (
-              <header className="col-span-full">
-                <h3>{series}</h3>
-                <span>{t("n_items", { n: group.length })}</span>
+              <header className="col-span-full mt-2">
+                <h3 className="text-base font-semibold text-white">{series}</h3>
+                <span className="text-sm text-slate-400">
+                  {t("n_items", { n: group.length })}
+                </span>
               </header>
             )}
             {group.map(render)}
           </section>
         ))}
         {!loading && grouped.standalone.length > 0 && grouped.groups.length > 0 && (
-          <h3 className="col-span-full">{t("other")}</h3>
+          <h3 className="col-span-full mt-2 text-base font-semibold text-white">
+            {t("other")}
+          </h3>
         )}
         {!loading && grouped.standalone.map(render)}
       </div>
       {pages > 1 && (
-        <nav id="library-pagination" aria-label="Library pages">
+        <nav
+          id="library-pagination"
+          aria-label="Library pages"
+          className="mt-4 flex flex-wrap items-center gap-2"
+        >
           <button
+            className={pageButton}
             data-action="goLibraryPage"
             disabled={page <= 1}
             onClick={() => setPage(page - 1)}
@@ -341,13 +370,16 @@ export function Library({
           </button>
           {start > 1 && (
             <>
-              <button onClick={() => setPage(1)}>1</button>
-              {start > 2 && <span>…</span>}
+              <button className={pageButton} onClick={() => setPage(1)}>
+                1
+              </button>
+              {start > 2 && <span className="text-slate-400">…</span>}
             </>
           )}
           {numbers.map((number) => (
             <button
               key={number}
+              className={pageButton}
               aria-current={number === page ? "page" : undefined}
               onClick={() => setPage(number)}
             >
@@ -356,11 +388,14 @@ export function Library({
           ))}
           {end < pages && (
             <>
-              {end < pages - 1 && <span>…</span>}
-              <button onClick={() => setPage(pages)}>{pages}</button>
+              {end < pages - 1 && <span className="text-slate-400">…</span>}
+              <button className={pageButton} onClick={() => setPage(pages)}>
+                {pages}
+              </button>
             </>
           )}
           <button
+            className={pageButton}
             data-action="goLibraryPage"
             disabled={page >= pages}
             onClick={() => setPage(page + 1)}
