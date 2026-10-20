@@ -190,7 +190,7 @@ function App(): React.JSX.Element {
                 data-action="openDownloads"
                 title={t("active_downloads_title", { n: activeDownloads })}
                 aria-label={t("active_downloads_title", { n: activeDownloads })}
-                className="inline-flex items-center gap-1 rounded-full bg-indigo-600 px-2.5 py-1 min-h-[1.75rem] text-xs font-semibold text-white hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400"
+                className="inline-flex items-center gap-1 rounded-full bg-indigo-600 px-2.5 py-1 min-h-[1.75rem] text-xs font-semibold text-white hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400"
                 onClick={() => {
                   setTab("downloads");
                   setNavVersion((x) => x + 1);

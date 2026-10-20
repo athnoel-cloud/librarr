@@ -310,12 +310,12 @@ function DownloadButton({
   const state = outcome?.state;
   const colour =
     state === "error"
-      ? "bg-red-700 hover:bg-red-600"
+      ? "bg-red-700 hover:bg-red-800"
       : state === "success"
         ? "bg-emerald-700"
         : result.in_library
-          ? "bg-amber-700 hover:bg-amber-600"
-          : "bg-indigo-600 hover:bg-indigo-500";
+          ? "bg-amber-700 hover:bg-amber-800"
+          : "bg-indigo-600 hover:bg-indigo-700";
   return (
     <button
       type="button"
@@ -1213,7 +1213,7 @@ export function Search({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <button className="px-4 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400">
+        <button className="px-4 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400">
           {t("nav_search")}
         </button>
       </form>

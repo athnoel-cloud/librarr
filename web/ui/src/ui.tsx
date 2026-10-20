@@ -87,12 +87,12 @@ export type ButtonVariant =
   | "danger"
   | "danger-solid";
 const variants: Record<ButtonVariant, string> = {
-  primary: "bg-indigo-600 text-white hover:bg-indigo-500",
+  primary: "bg-indigo-600 text-white hover:bg-indigo-700",
   secondary:
     "bg-slate-800 text-slate-100 border border-slate-700 hover:bg-slate-700",
   ghost: "text-slate-300 hover:bg-slate-800 hover:text-white",
   danger: "text-red-300 hover:bg-red-900/40 hover:text-red-200",
-  "danger-solid": "bg-red-700 text-white hover:bg-red-600",
+  "danger-solid": "bg-red-700 text-white hover:bg-red-800",
 };
 const sizes = {
   sm: "min-h-[2rem] px-3 py-1.5 text-sm",
