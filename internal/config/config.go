@@ -150,6 +150,12 @@ type Config struct {
 
 	// Search filtering
 	ForeignLangFilter bool // filter out non-English titles (default: true for backward compat)
+	// LanguagePreferred lists language codes (fr, en, multi...) the scheduler
+	// prefers; LanguageMode is "prefer" (score bonus) or "require" (a release
+	// tagged with another language is rejected; untagged releases pass).
+	LanguagePreferred []string
+	LanguageMode      string
+	LanguageBonus     float64
 
 	// Feature toggles
 	RateLimitEnabled bool
@@ -408,6 +414,9 @@ func buildFromEnv() *Config {
 		BookTrackerEnabled: getEnvBool("BOOKTRACKER_ENABLED", false),
 
 		ForeignLangFilter: getEnvBool("FOREIGN_LANG_FILTER", true),
+		LanguagePreferred: splitCSV(strings.ToLower(getEnv("LANGUAGE_PREFERRED", ""))),
+		LanguageMode:      strings.ToLower(getEnv("LANGUAGE_MODE", "prefer")),
+		LanguageBonus:     float64(getEnvInt("LANGUAGE_BONUS", 30)),
 
 		LNCrawlContainer: getEnv("LNCRAWL_CONTAINER", ""),
 

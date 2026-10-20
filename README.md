@@ -467,6 +467,9 @@ values saved there persist in `settings.json` and override the environment.
 | `SCHEDULER_INTERVAL_HOURS` | `24` | Hours between passes |
 | `SCHEDULER_AUTO_DOWNLOAD` | `false` | Grab the best acceptable release (otherwise only notify) |
 | `SCHEDULER_MIN_SCORE` | `70` | Minimum match confidence (0-100); the profile ranks what passes |
+| `LANGUAGE_PREFERRED` | | Comma-separated language codes the scheduler prefers (`fr`, `en`, `multi`, `de`, `es`, `it`, `ru`, `ja`). Every result gets a `language` read from the release name tags (`FRENCH`, `VFF`, `MULTi`, `ENGLISH`, …); untagged releases stay unknown and are never penalised |
+| `LANGUAGE_MODE` | `prefer` | `prefer`: a preferred language adds `LANGUAGE_BONUS` to the score (format rank still comes first, as in Radarr). `require`: a release tagged with another language is rejected ("language en") |
+| `LANGUAGE_BONUS` | `30` | Score bonus for a preferred language |
 | `SCHEDULER_ITEM_DELAY_SECONDS` | `5` | Pause between two items that hit the sources |
 | `AUTO_UPGRADE_ENABLED` | `false` | Global switch: replace an existing file when a better-ranked format appears (each profile also has its own flag) |
 | `UPGRADE_KEEP_OLD_FILES` | `false` | Keep the superseded file and its library row after an upgrade instead of deleting it |

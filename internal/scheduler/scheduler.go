@@ -413,7 +413,12 @@ func (s *Scheduler) processItem(ctx context.Context, item models.WishlistItem, d
 			rejected = append(rejected, why)
 			continue
 		}
-		cands = append(cands, quality.Candidate{Index: i, Format: search.DetectFormat(r), Score: r.Score + bonus, Size: r.Size})
+		langBonus, langReject := s.languageDecision(r.Language)
+		if langReject != "" {
+			rejected = append(rejected, langReject)
+			continue
+		}
+		cands = append(cands, quality.Candidate{Index: i, Format: search.DetectFormat(r), Score: r.Score + bonus + langBonus, Size: r.Size})
 	}
 	best, decisions := profile.Choose(cands, item.CurrentFormat)
 	for _, d := range decisions {
@@ -609,6 +614,25 @@ func (s *Scheduler) startDownload(result models.SearchResult, item models.Wishli
 		return job.ID, nil
 	}
 	return "", errors.New("release has no downloadable link")
+}
+
+// languageDecision applies the global language preference to a release whose
+// language is known: a preferred language earns the bonus; in "require" mode
+// any other tagged language is rejected. An untagged release is left alone —
+// it may well be in the preferred language.
+func (s *Scheduler) languageDecision(code string) (bonus float64, reject string) {
+	if code == "" || len(s.cfg.LanguagePreferred) == 0 {
+		return 0, ""
+	}
+	for _, want := range s.cfg.LanguagePreferred {
+		if strings.EqualFold(strings.TrimSpace(want), code) {
+			return s.cfg.LanguageBonus, ""
+		}
+	}
+	if s.cfg.LanguageMode == "require" {
+		return 0, "language " + code + " (preferred: " + strings.Join(s.cfg.LanguagePreferred, ", ") + ")"
+	}
+	return 0, ""
 }
 
 // isTorrentRelease reports whether a release has to go through the torrent

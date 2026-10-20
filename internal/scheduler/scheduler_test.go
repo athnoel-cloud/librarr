@@ -691,3 +691,46 @@ func TestRun_DirectReleaseStillUsesTheDirectDownloader(t *testing.T) {
 		t.Fatalf("grabbed %+v, want the direct downloader", g)
 	}
 }
+
+// With LANGUAGE_PREFERRED=fr, a French release beats an English one of the
+// same format and score; in "require" mode the English one is rejected with
+// a language reason, and an untagged release is never rejected.
+func TestRun_LanguagePreferenceDecidesBetweenEqualReleases(t *testing.T) {
+	f := newSchedFixture(t)
+	f.cfg.LanguagePreferred, f.cfg.LanguageMode, f.cfg.LanguageBonus = []string{"fr"}, "prefer", 30
+	f.want("Primal Hunter 5", "Zogarth", "ebook")
+	en := res("Primal Hunter 5 ENGLISH EPUB", "src", "epub", 90, "http://x/en.epub")
+	en.Language = "en"
+	fr := res("Primal.Hunter.Tome.5.FRENCH.[EPUB]", "src", "epub", 90, "http://x/fr.epub")
+	fr.Language = "fr"
+	f.srch.results["Primal Hunter 5"] = []models.SearchResult{en, fr}
+
+	if stats := f.s.RunCtx(context.Background()); stats.Grabbed != 1 {
+		t.Fatalf("stats: %+v", stats)
+	}
+	if g := f.dl.last(); g.url != "http://x/fr.epub" {
+		t.Fatalf("grabbed %+v, want the French release", g)
+	}
+}
+
+func TestRun_LanguageRequireRejectsOtherTaggedLanguagesOnly(t *testing.T) {
+	f := newSchedFixture(t)
+	f.cfg.LanguagePreferred, f.cfg.LanguageMode, f.cfg.LanguageBonus = []string{"fr"}, "require", 30
+	id := f.want("Primal Hunter 5", "Zogarth", "ebook")
+	en := res("Primal Hunter 5 ENGLISH EPUB", "src", "epub", 90, "http://x/en.epub")
+	en.Language = "en"
+	f.srch.results["Primal Hunter 5"] = []models.SearchResult{en}
+
+	if stats := f.s.RunCtx(context.Background()); stats.Grabbed != 0 {
+		t.Fatalf("English-only release must be rejected: %+v", stats)
+	}
+	if it := f.item(id); !strings.Contains(it.LastResult, "language en") {
+		t.Fatalf("last result should name the language rejection: %q", it.LastResult)
+	}
+
+	untagged := res("Primal Hunter 5 EPUB", "src", "epub", 90, "http://x/untagged.epub")
+	f.srch.results["Primal Hunter 5"] = []models.SearchResult{untagged}
+	if stats := f.s.RunCtx(context.Background()); stats.Grabbed != 1 {
+		t.Fatalf("an untagged release must still be grabbed in require mode: %+v", stats)
+	}
+}
