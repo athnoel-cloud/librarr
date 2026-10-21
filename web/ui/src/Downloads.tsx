@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, type DownloadJob } from "./api";
+import { api, type DownloadJob, type ImportStateName } from "./api";
 import { useTranslation, type TranslationKey } from "./i18n";
 import {
   Button,
@@ -29,9 +29,18 @@ const labels: Record<string, string> = {
   error: "Error",
   dead_letter: "Dead Letter",
 };
-const tone = (status: string): Tone =>
+// A torrent the client calls "completed" is only a success once the watcher
+// imported it: while the import is pending or failed, the status badge is
+// amber/red so a stalled torrent never looks done.
+const tone = (status: string, importState?: string): Tone =>
   status === "completed"
-    ? "ok"
+    ? importState === "failed"
+      ? "danger"
+      : importState === "pending"
+        ? "warn"
+        : importState === "importing"
+          ? "info"
+          : "ok"
     : status === "error" || status === "dead_letter"
       ? "danger"
       : status === "retry_wait"
@@ -39,6 +48,17 @@ const tone = (status: string): Tone =>
         : activeStatuses.has(status)
           ? "info"
           : "neutral";
+const importTone: Record<ImportStateName, Tone> = {
+  pending: "warn",
+  importing: "info",
+  imported: "ok",
+  failed: "danger",
+};
+const isImportState = (value: unknown): value is ImportStateName =>
+  value === "pending" ||
+  value === "importing" ||
+  value === "imported" ||
+  value === "failed";
 
 export function Downloads({
   setNotice,
@@ -179,7 +199,10 @@ export function Downloads({
         {jobs.map((job, index) => {
           const progress = job.progress ?? 0,
             id = job.job_id ?? job.hash ?? String(index),
-            retrying = pending.has(job.job_id ?? "");
+            retrying = pending.has(job.job_id ?? ""),
+            importState = isImportState(job.import_state)
+              ? job.import_state
+              : undefined;
           return (
             <article
               data-download-id={id}
@@ -188,7 +211,7 @@ export function Downloads({
             >
               <div className="flex flex-wrap items-center gap-2">
                 <StatusBadge
-                  tone={tone(job.status)}
+                  tone={tone(job.status, importState)}
                   pulse={job.status === "downloading"}
                   data-download-status={job.status}
                 >
@@ -196,6 +219,16 @@ export function Downloads({
                     ? t(`status_${job.status}` as TranslationKey)
                     : job.status}
                 </StatusBadge>
+                {importState && (
+                  <StatusBadge
+                    tone={importTone[importState]}
+                    pulse={importState === "importing"}
+                    data-import-state={importState}
+                    title={job.import_detail || undefined}
+                  >
+                    {t(`import_state_${importState}`)}
+                  </StatusBadge>
+                )}
                 {job.source && (
                   <span className="text-sm text-slate-400">{job.source}</span>
                 )}
@@ -207,6 +240,15 @@ export function Downloads({
                 {job.title || t("unknown_title")}
               </h4>
               <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-slate-400">
+                {job.import_detail && (
+                  <span
+                    data-import-detail
+                    className="[overflow-wrap:anywhere]"
+                    title={job.import_detail}
+                  >
+                    {job.import_detail}
+                  </span>
+                )}
                 {job.detail && <span title={job.detail}>{job.detail}</span>}
                 {(job.max_retries ?? 0) > 0 && (job.retry_count ?? 0) > 0 && (
                   <span>

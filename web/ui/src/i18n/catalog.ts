@@ -356,6 +356,10 @@ export const catalog = {
     lang_name_ru: "Russian",
     lang_name_ja: "Japanese",
     wanted_language_hint: "Language: {langs} · {mode}",
+    import_state_pending: "Import pending",
+    import_state_importing: "Importing",
+    import_state_imported: "Imported",
+    import_state_failed: "Import failed",
   },
   ru: {
     nav_search: "Поиск",
@@ -923,5 +927,9 @@ export const catalog = {
     lang_name_ru: "Russe",
     lang_name_ja: "Japonais",
     wanted_language_hint: "Langue : {langs} · {mode}",
+    import_state_pending: "Import en attente",
+    import_state_importing: "Import en cours",
+    import_state_imported: "Importé",
+    import_state_failed: "Import échoué",
   },
 } as const;

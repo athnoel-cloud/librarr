@@ -159,7 +159,13 @@ export interface DownloadJob {
   detail?: string;
   retry_count?: number;
   max_retries?: number;
+  // What the completion watcher did with a finished torrent: pending (content
+  // not usable yet, see import_detail), importing, imported or failed. Absent
+  // or empty when the torrent has not been examined yet (and for direct jobs).
+  import_state?: ImportStateName | "";
+  import_detail?: string;
 }
+export type ImportStateName = "pending" | "importing" | "imported" | "failed";
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
