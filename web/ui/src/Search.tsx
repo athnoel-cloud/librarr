@@ -408,8 +408,12 @@ function releaseMenu(p: RowProps, t: Translate): MenuItem[] {
     });
   return items;
 }
+// The whole release name is the information (language, format, group live in
+// it), so it wraps as far as it must: no clamp, no fixed height, dotted names
+// break anywhere. style.css repeats the rule by id in case the runtime
+// Tailwind skips an arbitrary property.
 const titleButton =
-  "text-left min-h-0 rounded hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 [overflow-wrap:anywhere]";
+  "block w-full text-left min-h-0 rounded hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 whitespace-normal break-words [overflow-wrap:anywhere]";
 function ResultRow(p: RowProps) {
   const { t } = useTranslation();
   const { result } = p;
@@ -483,9 +487,10 @@ function ResultCard(p: RowProps) {
   const confidence = confidenceKey(result.score_breakdown?.confidence);
   return (
     <article
-      className={`book-card bg-slate-900 border border-slate-700 rounded-xl overflow-hidden flex flex-col ${p.blocked ? "opacity-60" : ""}`}
+      className={`book-card bg-slate-900 border border-slate-700 rounded-xl flex flex-col ${p.blocked ? "opacity-60" : ""}`}
     >
-      <div className="relative">
+      {/* Only the cover clips: the card itself grows with its title and lets the ⋯ menu overhang. */}
+      <div className="relative overflow-hidden rounded-t-xl">
         <Cover result={result} />
         <span className="absolute top-2 left-2 bg-slate-800 text-white text-xs px-2 py-1 rounded">
           {result.source}
@@ -498,7 +503,7 @@ function ResultCard(p: RowProps) {
         <div className="flex items-start gap-2">
           <h3
             title={result.title}
-            className="text-sm font-medium text-slate-100 flex-1 min-w-0 [overflow-wrap:anywhere]"
+            className="text-sm font-medium text-slate-100 flex-1 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]"
           >
             <button
               type="button"
