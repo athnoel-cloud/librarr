@@ -20,6 +20,7 @@ import { AccountSettings } from "./AccountSettings";
 import { GeneralSettings } from "./GeneralSettings";
 import { LOCALES, useTranslation, type Locale } from "./i18n";
 import { langLabel } from "./lang";
+import { translateReason } from "./reasons";
 import { Search, type SearchIntent } from "./Search";
 import {
   Badge,
@@ -591,7 +592,7 @@ function WantedOutcomeTable({
   dryRun: boolean;
   onClose: () => void;
 }): React.JSX.Element {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const decisions = outcome.decisions ?? [];
   return (
     <div
@@ -601,7 +602,9 @@ function WantedOutcomeTable({
       <div className="flex flex-wrap items-start justify-between gap-2">
         <p className="text-sm text-slate-300">
           <strong className="text-slate-100">{outcome.action ?? ""}</strong> —{" "}
-          {outcome.reason ?? ""}
+          <span title={outcome.reason ?? ""}>
+            {translateReason(locale, outcome.reason)}
+          </span>
           {outcome.candidate && (
             <span className="text-slate-400"> ({outcome.candidate})</span>
           )}
@@ -659,8 +662,11 @@ function WantedOutcomeTable({
                       {decision.source ?? ""}
                     </span>
                   </td>
-                  <td className="py-1 whitespace-normal">
-                    {decision.reason ?? ""}
+                  <td
+                    className="py-1 whitespace-normal"
+                    title={decision.reason ?? ""}
+                  >
+                    {translateReason(locale, decision.reason)}
                   </td>
                 </tr>
               ))}
@@ -699,7 +705,7 @@ function Wanted({
   onSearch: (query: string, media: MediaType) => void;
   setNotice: (s: string) => void;
 }): React.JSX.Element {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const [items, setItems] = useState<WishlistItem[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -796,7 +802,7 @@ function Wanted({
       setDetails((previous) => ({ ...previous, [id]: { outcome, dryRun } }));
       setNotice(
         t("wanted_search_started", {
-          reason: outcome.reason ?? outcome.action ?? "",
+          reason: translateReason(locale, outcome.reason ?? outcome.action),
         }),
       );
       await load();
@@ -1115,7 +1121,9 @@ function Wanted({
                   className="mt-1 text-sm text-slate-300"
                   title={item.last_result}
                 >
-                  {t("wanted_last", { result: item.last_result })}
+                  {t("wanted_last", {
+                    result: translateReason(locale, item.last_result),
+                  })}
                 </p>
               )}
             </ListRow>

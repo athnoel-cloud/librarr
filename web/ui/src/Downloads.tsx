@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type DownloadJob, type ImportStateName } from "./api";
 import { useTranslation, type TranslationKey } from "./i18n";
+import { translateReason } from "./reasons";
 import {
   Button,
   EmptyState,
@@ -61,7 +62,7 @@ export function Downloads({
 }: {
   setNotice: (message: string) => void;
 }): React.JSX.Element {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const [jobs, setJobs] = useState<DownloadJob[]>([]),
     [refreshing, setRefreshing] = useState(false),
     [clearing, setClearing] = useState(false),
@@ -242,7 +243,7 @@ export function Downloads({
                     className="[overflow-wrap:anywhere]"
                     title={job.import_detail}
                   >
-                    {job.import_detail}
+                    {translateReason(locale, job.import_detail)}
                   </span>
                 )}
                 {job.detail && <span title={job.detail}>{job.detail}</span>}
