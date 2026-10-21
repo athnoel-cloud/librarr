@@ -1,4 +1,11 @@
-import { FormEvent, StrictMode, useEffect, useState } from "react";
+import {
+  FormEvent,
+  StrictMode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { createRoot } from "react-dom/client";
 import {
   api,
@@ -29,6 +36,8 @@ import {
   ListRow,
   PageHeader,
   StatusBadge,
+  Toasts,
+  type ToastItem,
   type Tone,
 } from "./ui";
 import "./style.css";
@@ -80,7 +89,27 @@ function App(): React.JSX.Element {
     window.addEventListener("keydown", keys);
     return () => window.removeEventListener("keydown", keys);
   }, []);
-  const [notice, setNotice] = useState("");
+  // Notices stack (three at most), close on click or after 6 s; the same
+  // text twice refreshes the existing toast instead of doubling it. Children
+  // keep the plain `setNotice(text)` call they always had.
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const toastId = useRef(0);
+  const dismiss = useCallback(
+    (id: number) => setToasts((old) => old.filter((item) => item.id !== id)),
+    [],
+  );
+  const setNotice = useCallback(
+    (text: string) => {
+      if (!text) return;
+      const id = ++toastId.current;
+      setToasts((old) =>
+        [...old.filter((item) => item.text !== text), { id, text }].slice(-3),
+      );
+      window.setTimeout(() => dismiss(id), 6000);
+    },
+    [dismiss],
+  );
+  const notice = toasts[toasts.length - 1]?.text ?? "";
   const refreshAuth = async (): Promise<void> =>
     setAuth(await authStatus());
   useEffect(() => {
@@ -140,7 +169,7 @@ function App(): React.JSX.Element {
             <p role="alert">{notice}</p>
             <button
               onClick={() => {
-                setNotice("");
+                setToasts([]);
                 void refreshAuth().catch((e) => setNotice(String(e)));
               }}
             >
@@ -157,7 +186,8 @@ function App(): React.JSX.Element {
       <AuthScreen
         auth={auth}
         onAuthenticated={refreshAuth}
-        notice={notice}
+        toasts={toasts}
+        onDismiss={dismiss}
         setNotice={setNotice}
       />
     );
@@ -166,7 +196,7 @@ function App(): React.JSX.Element {
       id="app"
       className="min-h-screen bg-slate-950 text-slate-200 font-sans"
     >
-      <Toast text={notice} />
+      <Toasts items={toasts} closeLabel={t("close")} onClose={dismiss} />
       <header className="relative bg-slate-900 border-b border-slate-800">
         <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between">
           <div className="flex items-center gap-2">
@@ -293,31 +323,17 @@ function App(): React.JSX.Element {
   );
 }
 
-function Toast({ text }: { text: string }): React.JSX.Element {
-  return (
-    <div
-      id="toast-container"
-      aria-live="polite"
-      className="fixed bottom-4 right-4 z-50"
-    >
-      {text && (
-        <p className="bg-slate-800 border border-slate-600 rounded-lg px-4 py-3">
-          {text}
-        </p>
-      )}
-    </div>
-  );
-}
-
 function AuthScreen({
   auth,
   onAuthenticated,
-  notice,
+  toasts,
+  onDismiss,
   setNotice,
 }: {
   auth: AuthStatus;
   onAuthenticated: () => Promise<void>;
-  notice: string;
+  toasts: ToastItem[];
+  onDismiss: (id: number) => void;
   setNotice: (message: string) => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
@@ -417,7 +433,7 @@ function AuthScreen({
       id="login-modal"
       className="min-h-screen bg-slate-950 flex items-center justify-center p-4"
     >
-      <Toast text={notice} />
+      <Toasts items={toasts} closeLabel={t("close")} onClose={onDismiss} />
       <section
         className="bg-slate-900 border border-slate-700 rounded-xl p-8 w-full max-w-md shadow-2xl"
         aria-labelledby="auth-title"
