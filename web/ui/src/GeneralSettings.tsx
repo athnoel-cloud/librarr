@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "./api";
-import { useTranslation } from "./i18n";
+import { useTranslation, type TranslationKey } from "./i18n";
 import { LANG_LABEL, type LangCode } from "./lang";
 import { Button } from "./ui";
 type Value = string | number | boolean | null;
@@ -54,18 +54,54 @@ const integrations = [
   ["komga", "Komga", ["komga_url", "komga_user", "komga_pass"]],
   ["calibre", "Calibre", ["calibre_url", "calibre_library_path"]],
 ] as const;
+// Setting key → catalogue key of its label.
 const toggles = [
-  ["scheduler_enabled", "Run the wanted scheduler"],
-  ["scheduler_auto_download", "Automatically download wanted matches"],
-  ["auto_upgrade_enabled", "Enable quality upgrades"],
-  ["upgrade_keep_old_files", "Keep old files after upgrades"],
-  ["author_monitor_enabled", "Monitor followed authors"],
+  ["scheduler_enabled", "s_sched_enabled"],
+  ["scheduler_auto_download", "s_sched_auto_download"],
+  ["auto_upgrade_enabled", "s_auto_upgrade"],
+  ["upgrade_keep_old_files", "s_keep_old"],
+  ["author_monitor_enabled", "s_authors_enabled"],
 ] as const;
 const numbers = [
-  ["scheduler_interval_hours", "Scheduler interval (hours)", 1],
-  ["scheduler_min_score", "Minimum match score", 0],
-  ["scheduler_item_delay_seconds", "Delay between items (seconds)", 0],
+  ["scheduler_interval_hours", "s_sched_interval", 1],
+  ["scheduler_min_score", "s_sched_min_score", 0],
+  ["scheduler_item_delay_seconds", "s_sched_delay", 0],
 ] as const;
+// Human labels for the integration fields; anything unknown falls back to
+// the key with its underscores spaced out.
+const fieldLabels: Record<string, TranslationKey> = {
+  annas_archive_domain: "f_domain",
+  annas_archive_secret_key: "f_secret_key",
+  prowlarr_url: "f_url",
+  prowlarr_api_key: "f_api_key",
+  qb_url: "f_url",
+  qb_user: "label_username",
+  qb_pass: "label_password",
+  transmission_url: "f_url",
+  transmission_user: "label_username",
+  transmission_pass: "label_password",
+  torrent_client: "f_torrent_client",
+  sabnzbd_url: "f_url",
+  sabnzbd_api_key: "f_api_key",
+  sabnzbd_category: "f_category",
+  abs_url: "f_url",
+  abs_token: "f_token",
+  kavita_url: "f_url",
+  kavita_user: "label_username",
+  kavita_pass: "label_password",
+  kavita_ebook_library_id: "f_ebook_library_id",
+  kavita_manga_library_id: "f_manga_library_id",
+  komga_url: "f_url",
+  komga_user: "label_username",
+  komga_pass: "label_password",
+  calibre_url: "f_url",
+  calibre_library_path: "f_library_path",
+};
+const importDescriptions: Record<string, TranslationKey> = {
+  move: "import_desc_move",
+  hardlink: "import_desc_hardlink",
+  copy: "import_desc_copy",
+};
 // Fixed display order; the CSV sent to the server follows it too.
 const languages: readonly LangCode[] = [
   "fr",
@@ -131,8 +167,7 @@ export function GeneralSettings() {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      if (!result.success)
-        throw new Error(result.error || "Failed to save settings");
+      if (!result.success) throw new Error(result.error || t("failed_save"));
       if (reload) {
         const fresh = await api<Settings>("/api/settings");
         setData((old) => ({
@@ -148,7 +183,7 @@ export function GeneralSettings() {
       }
       setNotice(
         name === "integration"
-          ? "Saved. Restart the container for new URLs/credentials to take effect."
+          ? t("settings_saved_restart")
           : name === "language-preset"
             ? t("s_language_preset_applied")
             : t("settings_saved"),
@@ -203,11 +238,10 @@ export function GeneralSettings() {
     await save("language-preset", { ...frenchFirst }, true);
   }
   const effective = String(data.effective_import_mode || "");
-  const descriptions: Record<string, string> = {
-    move: "Imports move files into the library — a kept torrent could not seed.",
-    hardlink:
-      "Imports hardlink into the library — kept torrents keep seeding, at no extra disk.",
-    copy: "Imports copy into the library — kept torrents keep seeding, using twice the disk.",
+  const effectiveDescription = importDescriptions[effective];
+  const fieldLabel = (key: string) => {
+    const label = fieldLabels[key];
+    return label ? t(label) : key.replaceAll("_", " ");
   };
   return (
     <div className="space-y-4">
@@ -222,9 +256,9 @@ export function GeneralSettings() {
         </p>
       )}
       <section className={box}>
-        <h3 className="text-lg font-semibold">Downloads and imports</h3>
+        <h3 className="text-lg font-semibold">{t("s_downloads_title")}</h3>
         <label className="block">
-          Import mode
+          {t("import_mode")}
           <select
             id="setting-import_mode"
             className={input}
@@ -234,10 +268,10 @@ export function GeneralSettings() {
               void save("import", { import_mode: e.target.value }, true)
             }
           >
-            <option value="">Automatic</option>
-            <option value="move">Move</option>
-            <option value="hardlink">Hardlink</option>
-            <option value="copy">Copy</option>
+            <option value="">{t("import_mode_auto")}</option>
+            <option value="move">{t("import_mode_move")}</option>
+            <option value="hardlink">{t("import_mode_hardlink")}</option>
+            <option value="copy">{t("import_mode_copy")}</option>
           </select>
         </label>
         <p
@@ -249,11 +283,11 @@ export function GeneralSettings() {
           }
         >
           {data.import_mode === "" && effective
-            ? `Automatic → ${effective}. `
+            ? `${t("import_mode_auto_effective", { mode: effective })} `
             : ""}
-          {descriptions[effective]}
+          {effectiveDescription ? t(effectiveDescription) : ""}
           {effective === "move" && data.remove_torrent_after_import === false
-            ? " Pick Hardlink above, or turn the setting below back on."
+            ? ` ${t("import_pick_hardlink")}`
             : ""}
         </p>
         <label className="block">
@@ -270,7 +304,7 @@ export function GeneralSettings() {
               )
             }
           />{" "}
-          Remove torrents after import
+          {t("remove_torrent_after_import")}
         </label>
         <label className="block">
           <input
@@ -299,13 +333,13 @@ export function GeneralSettings() {
               checked={data[key] === true}
               onChange={(e) => edit(key, e.target.checked)}
             />{" "}
-            {label}
+            {t(label)}
           </label>
         ))}
         <div className="grid gap-3 sm:grid-cols-3">
           {numbers.map(([key, label, min]) => (
             <label key={key}>
-              {label}
+              {t(label)}
               <input
                 id={`setting-${key}`}
                 className={input}
@@ -334,7 +368,7 @@ export function GeneralSettings() {
             )
           }
         >
-          Save
+          {t("save")}
         </button>
         <p id="scheduler-status" className="text-sm text-slate-400">
           {scheduler.last_run
@@ -434,7 +468,7 @@ export function GeneralSettings() {
         </div>
       </section>
       <section className={box}>
-        <h3 className="text-lg font-semibold">Integrations</h3>
+        <h3 className="text-lg font-semibold">{t("s_integrations")}</h3>
         <div className="grid gap-4 md:grid-cols-2">
           {integrations.map(([name, label, fields]) => (
             <form
@@ -455,7 +489,7 @@ export function GeneralSettings() {
               <h4 className="font-semibold">{label}</h4>
               {fields.map((key) => (
                 <label key={key} className="block text-sm">
-                  {key.replaceAll("_", " ")}
+                  {fieldLabel(key)}
                   {key === "torrent_client" ? (
                     <select
                       id={`setting-${key}`}
@@ -489,7 +523,7 @@ export function GeneralSettings() {
                   data-action="saveIntegration"
                   data-arg={name}
                 >
-                  Save
+                  {t("save")}
                 </button>
                 {!["annas", "komga", "calibre"].includes(name) && (
                   <button
@@ -499,7 +533,7 @@ export function GeneralSettings() {
                     data-arg={name}
                     onClick={() => void test(name)}
                   >
-                    Test connection
+                    {t("test_connection")}
                   </button>
                 )}
               </div>
@@ -511,7 +545,7 @@ export function GeneralSettings() {
         </div>
       </section>
       <section className={box}>
-        <h3 className="text-lg font-semibold">Sources</h3>
+        <h3 className="text-lg font-semibold">{t("s_search_sources")}</h3>
         <div id="sources-list" className="space-y-2">
           {sources.map((source, index) => (
             <div
@@ -530,7 +564,7 @@ export function GeneralSettings() {
         </div>
       </section>
       <section className={box}>
-        <h3 className="text-lg font-semibold">Configuration</h3>
+        <h3 className="text-lg font-semibold">{t("s_configuration")}</h3>
         <div id="config-info">
           {Object.entries(config)
             .filter(

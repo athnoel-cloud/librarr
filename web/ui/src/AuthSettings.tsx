@@ -43,10 +43,7 @@ export function AuthSettings() {
     setNotice("");
     try {
       const d = await api<Enrollment>("/api/totp/setup", { method: "POST" });
-      if (!d.success)
-        throw new Error(
-          d.error || "Failed to set up two-factor authentication",
-        );
+      if (!d.success) throw new Error(d.error || t("failed_setup_totp"));
       setEnrollment(d);
       setMode("enroll");
       setCode("");
@@ -58,7 +55,7 @@ export function AuthSettings() {
   }
   async function submit() {
     if (!code.trim()) {
-      setError("Enter your authentication code.");
+      setError(t("enter_totp_code"));
       return;
     }
     setBusy(true);
@@ -69,12 +66,10 @@ export function AuthSettings() {
         disable ? "/api/totp/disable" : "/api/totp/verify",
         { method: "POST", body: JSON.stringify({ code: code.trim() }) },
       );
-      if (!d.success) throw new Error(d.error || "Invalid authentication code");
+      if (!d.success) throw new Error(d.error || t("verification_failed"));
       setEnabled(!disable);
       setNotice(
-        disable
-          ? "Two-factor authentication disabled."
-          : "Two-factor authentication enabled.",
+        disable ? t("totp_disabled_success") : t("totp_enabled_success"),
       );
       setMode("status");
       setEnrollment(undefined);
@@ -108,18 +103,18 @@ export function AuthSettings() {
           {notice}
         </p>
       )}
-      {enabled === undefined && <p className="text-slate-400">Loading…</p>}
+      {enabled === undefined && (
+        <p className="text-slate-400">{t("loading")}</p>
+      )}
       {mode === "status" && enabled === false && (
         <div id="totp-disabled-section">
-          <p className="text-sm text-slate-400">
-            Two-factor authentication is not enabled.
-          </p>
+          <p className="text-sm text-slate-400">{t("totp_not_enabled")}</p>
           <button
             disabled={busy}
             onClick={() => void setup()}
             className="px-4 py-2 mt-3 bg-indigo-600 text-white rounded-lg"
           >
-            {busy ? "Preparing…" : t("enable_2fa")}
+            {busy ? t("preparing") : t("enable_2fa")}
           </button>
         </div>
       )}
@@ -146,7 +141,7 @@ export function AuthSettings() {
               <img
                 id="totp-qr-img"
                 src={enrollment.qr_png}
-                alt="Authenticator setup QR code"
+                alt={t("totp_qr_alt")}
                 width={200}
                 height={200}
               />
@@ -187,9 +182,7 @@ export function AuthSettings() {
           className="space-y-3"
         >
           <label className="block text-sm text-slate-300">
-            {mode === "disable"
-              ? "Current authentication code"
-              : "Authentication code"}
+            {mode === "disable" ? t("totp_current_code") : t("totp_code")}
             <input
               id={mode === "disable" ? "totp-disable-code" : "totp-verify-code"}
               value={code}
@@ -206,9 +199,9 @@ export function AuthSettings() {
               className="px-4 py-2 bg-indigo-600 text-white rounded-lg"
             >
               {busy
-                ? "Checking…"
+                ? t("checking")
                 : mode === "disable"
-                  ? "Disable two-factor authentication"
+                  ? t("totp_disable_btn")
                   : t("verify_enable")}
             </button>
             <button

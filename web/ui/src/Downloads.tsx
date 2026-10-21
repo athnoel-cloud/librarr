@@ -18,17 +18,13 @@ export const activeStatuses = new Set([
   "importing",
   "retry_wait",
 ]);
-const labels: Record<string, string> = {
-  queued: "Queued",
-  searching: "Searching",
-  downloading: "Downloading",
-  organizing: "Organizing",
-  importing: "Importing",
-  retry_wait: "Retry Wait",
-  completed: "Completed",
-  error: "Error",
-  dead_letter: "Dead Letter",
-};
+// Statuses with a status_* entry in the catalogue; others show as-is.
+const known = new Set([
+  ...activeStatuses,
+  "completed",
+  "error",
+  "dead_letter",
+]);
 // A torrent the client calls "completed" is only a success once the watcher
 // imported it: while the import is pending or failed, the status badge is
 // amber/red so a stalled torrent never looks done.
@@ -215,7 +211,7 @@ export function Downloads({
                   pulse={job.status === "downloading"}
                   data-download-status={job.status}
                 >
-                  {job.status in labels
+                  {known.has(job.status)
                     ? t(`status_${job.status}` as TranslationKey)
                     : job.status}
                 </StatusBadge>
