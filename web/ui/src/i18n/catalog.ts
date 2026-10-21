@@ -327,6 +327,35 @@ export const catalog = {
     wanted_th_score: "Score",
     wanted_th_release: "Release",
     wanted_th_decision: "Decision",
+    s_language_title: "Release language",
+    s_language_desc:
+      "The language is read from the release name (FRENCH, MULTi, VF…) or reported by the source. Tick the languages you want; the scheduler applies this to every wanted item.",
+    s_language_preferred: "Preferred languages",
+    s_language_mode: "Mode",
+    s_language_mode_prefer: "Prefer",
+    s_language_mode_require: "Require",
+    s_language_mode_prefer_help:
+      "Prefer: releases in these languages get a score bonus; the format still comes first.",
+    s_language_mode_require_help:
+      "Require: a release tagged in another language is rejected; an untagged release still passes.",
+    s_language_none_help:
+      "No language ticked: nothing is preferred or required.",
+    s_language_bonus: "Score bonus (0–100)",
+    s_language_bonus_help:
+      "Added to the score of a release in a preferred language. Default: 30.",
+    s_language_preset_french: "Preset: French first",
+    s_language_preset_french_help:
+      "FR and MULTi preferred, mode Prefer, bonus 30 — nothing is rejected.",
+    s_language_preset_applied: "Preset applied: French first",
+    lang_name_fr: "French",
+    lang_name_multi: "Multi-language",
+    lang_name_en: "English",
+    lang_name_de: "German",
+    lang_name_es: "Spanish",
+    lang_name_it: "Italian",
+    lang_name_ru: "Russian",
+    lang_name_ja: "Japanese",
+    wanted_language_hint: "Language: {langs} · {mode}",
   },
   ru: {
     nav_search: "Поиск",
@@ -865,5 +894,34 @@ export const catalog = {
     wanted_th_score: "Score",
     wanted_th_release: "Release",
     wanted_th_decision: "Décision",
+    s_language_title: "Langue des releases",
+    s_language_desc:
+      "La langue est lue dans le nom de la release (FRENCH, MULTi, VF…) ou indiquée par la source. Cochez les langues voulues ; le planificateur l'applique à tous les éléments recherchés.",
+    s_language_preferred: "Langues préférées",
+    s_language_mode: "Mode",
+    s_language_mode_prefer: "Préférer",
+    s_language_mode_require: "Exiger",
+    s_language_mode_prefer_help:
+      "Préférer : les releases dans ces langues reçoivent un bonus de score ; le format reste prioritaire.",
+    s_language_mode_require_help:
+      "Exiger : une release taguée dans une autre langue est rejetée ; une release non taguée passe.",
+    s_language_none_help:
+      "Aucune langue cochée : rien n'est préféré ni exigé.",
+    s_language_bonus: "Bonus de score (0–100)",
+    s_language_bonus_help:
+      "Ajouté au score d'une release dans une langue préférée. Par défaut : 30.",
+    s_language_preset_french: "Préréglage : Français d'abord",
+    s_language_preset_french_help:
+      "FR et MULTi préférés, mode Préférer, bonus 30 — rien n'est rejeté.",
+    s_language_preset_applied: "Préréglage appliqué : Français d'abord",
+    lang_name_fr: "Français",
+    lang_name_multi: "Multilingue",
+    lang_name_en: "Anglais",
+    lang_name_de: "Allemand",
+    lang_name_es: "Espagnol",
+    lang_name_it: "Italien",
+    lang_name_ru: "Russe",
+    lang_name_ja: "Japonais",
+    wanted_language_hint: "Langue : {langs} · {mode}",
   },
 } as const;

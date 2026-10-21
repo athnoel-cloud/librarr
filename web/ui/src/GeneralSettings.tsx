@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "./api";
 import { useTranslation } from "./i18n";
+import { LANG_LABEL, type LangCode } from "./lang";
+import { Button } from "./ui";
 type Value = string | number | boolean | null;
 type Settings = Record<string, Value>;
 interface Result {
@@ -64,6 +66,24 @@ const numbers = [
   ["scheduler_min_score", "Minimum match score", 0],
   ["scheduler_item_delay_seconds", "Delay between items (seconds)", 0],
 ] as const;
+// Fixed display order; the CSV sent to the server follows it too.
+const languages: readonly LangCode[] = [
+  "fr",
+  "multi",
+  "en",
+  "de",
+  "es",
+  "it",
+  "ru",
+  "ja",
+];
+// "French first": FR and MULTi get the bonus, the format still decides,
+// nothing is rejected.
+const frenchFirst = {
+  language_preferred: "fr,multi",
+  language_mode: "prefer",
+  language_bonus: 30,
+} as const;
 const box = "bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3";
 const input =
   "block w-full min-w-0 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2";
@@ -129,7 +149,9 @@ export function GeneralSettings() {
       setNotice(
         name === "integration"
           ? "Saved. Restart the container for new URLs/credentials to take effect."
-          : t("settings_saved"),
+          : name === "language-preset"
+            ? t("s_language_preset_applied")
+            : t("settings_saved"),
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -153,6 +175,32 @@ export function GeneralSettings() {
         [name]: e instanceof Error ? e.message : String(e),
       }));
     }
+  }
+  // Language preference (GET/POST /api/settings: language_preferred CSV,
+  // language_mode prefer|require, language_bonus number). Absent keys — an
+  // older server — fall back to "nothing preferred".
+  const preferred = languages.filter((code) =>
+    String(data.language_preferred ?? "")
+      .split(",")
+      .map((item) => item.trim().toLowerCase())
+      .includes(code),
+  );
+  const languageMode = data.language_mode === "require" ? "require" : "prefer";
+  const languageBonus = Number(data.language_bonus ?? frenchFirst.language_bonus);
+  const languagePayload = () => ({
+    language_preferred: preferred.join(","),
+    language_mode: languageMode,
+    language_bonus: Number.isFinite(languageBonus) ? languageBonus : 0,
+  });
+  function togglePreferred(code: LangCode, on: boolean) {
+    const next = languages.filter((item) =>
+      item === code ? on : preferred.includes(item),
+    );
+    edit("language_preferred", next.join(","));
+  }
+  async function applyFrenchFirst() {
+    setData((old) => ({ ...old, ...frenchFirst }));
+    await save("language-preset", { ...frenchFirst }, true);
   }
   const effective = String(data.effective_import_mode || "");
   const descriptions: Record<string, string> = {
@@ -293,6 +341,97 @@ export function GeneralSettings() {
             ? `${new Date(scheduler.last_run).toLocaleString()} — ${scheduler.last_result || ""}`
             : ""}
         </p>
+      </section>
+      <section id="language-settings" className={box}>
+        <h3 className="text-lg font-semibold">{t("s_language_title")}</h3>
+        <p className="text-sm text-slate-400 max-w-prose">
+          {t("s_language_desc")}
+        </p>
+        <fieldset>
+          <legend className="text-sm text-slate-300 mb-1">
+            {t("s_language_preferred")}
+          </legend>
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {languages.map((code) => (
+              <label
+                key={code}
+                className="inline-flex items-center min-h-[2.75rem] sm:min-h-0 text-sm cursor-pointer"
+              >
+                <input
+                  id={`setting-language-${code}`}
+                  type="checkbox"
+                  checked={preferred.includes(code)}
+                  disabled={!!busy}
+                  onChange={(e) => togglePreferred(code, e.target.checked)}
+                />
+                <span className="font-medium">{LANG_LABEL[code]}</span>
+                <span className="text-slate-400">
+                  &nbsp;· {t(`lang_name_${code}`)}
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-sm">
+            {t("s_language_mode")}
+            <select
+              id="setting-language_mode"
+              className={input}
+              value={languageMode}
+              disabled={!!busy}
+              onChange={(e) => edit("language_mode", e.target.value)}
+            >
+              <option value="prefer">{t("s_language_mode_prefer")}</option>
+              <option value="require">{t("s_language_mode_require")}</option>
+            </select>
+          </label>
+          <label className="block text-sm">
+            {t("s_language_bonus")}
+            <input
+              id="setting-language_bonus"
+              className={input}
+              type="number"
+              min={0}
+              max={100}
+              value={Number.isFinite(languageBonus) ? languageBonus : 0}
+              disabled={!!busy}
+              onChange={(e) => edit("language_bonus", Number(e.target.value))}
+            />
+          </label>
+        </div>
+        <p
+          id="language-mode-help"
+          className="text-sm text-slate-400 max-w-prose"
+        >
+          {preferred.length
+            ? t(
+                languageMode === "require"
+                  ? "s_language_mode_require_help"
+                  : "s_language_mode_prefer_help",
+              )
+            : t("s_language_none_help")}{" "}
+          {t("s_language_bonus_help")}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="primary"
+            data-action="saveLanguageSettings"
+            disabled={!!busy}
+            onClick={() => void save("language", languagePayload(), true)}
+          >
+            {t("save")}
+          </Button>
+          <Button
+            variant="secondary"
+            data-action="languagePresetFrench"
+            disabled={!!busy}
+            title={t("s_language_preset_french_help")}
+            onClick={() => void applyFrenchFirst()}
+          >
+            {t("s_language_preset_french")}
+          </Button>
+        </div>
       </section>
       <section className={box}>
         <h3 className="text-lg font-semibold">Integrations</h3>

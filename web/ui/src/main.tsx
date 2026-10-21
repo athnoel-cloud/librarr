@@ -20,6 +20,7 @@ import { AuthSettings } from "./AuthSettings";
 import { AccountSettings } from "./AccountSettings";
 import { GeneralSettings } from "./GeneralSettings";
 import { LOCALES, useTranslation, type Locale } from "./i18n";
+import { langLabel } from "./lang";
 import { Search, type SearchIntent } from "./Search";
 import {
   Badge,
@@ -722,6 +723,35 @@ function Wanted({
     Record<number, { outcome: WantedOutcome; dryRun: boolean }>
   >({});
   const [upgrades, setUpgrades] = useState(true);
+  // Reminder of the active language preference. /api/settings is admin-only
+  // and older servers do not expose the keys: the reminder is simply absent.
+  const [langPref, setLangPref] = useState<{
+    preferred: string[];
+    mode: "prefer" | "require";
+  }>();
+  useEffect(() => {
+    if (!admin) return;
+    let active = true;
+    void api<{ language_preferred?: string; language_mode?: string }>(
+      "/api/settings",
+    )
+      .then((settings) => {
+        if (!active) return;
+        setLangPref({
+          preferred: String(settings.language_preferred ?? "")
+            .split(",")
+            .map((code) => code.trim().toLowerCase())
+            .filter(Boolean),
+          mode: settings.language_mode === "require" ? "require" : "prefer",
+        });
+      })
+      .catch(() => {
+        /* Optional hint: the list works without it. */
+      });
+    return () => {
+      active = false;
+    };
+  }, [admin]);
   const load = async () => {
     try {
       const [wanted, quality] = await Promise.all([
@@ -787,7 +817,24 @@ function Wanted({
     <section id="tab-wishlist" className="tab-content active">
       <PageHeader
         title={t("wishlist_title")}
-        subtitle={<span id="wanted-summary">{summary}</span>}
+        subtitle={
+          <>
+            <span id="wanted-summary">{summary}</span>
+            {langPref && langPref.preferred.length > 0 && (
+              <span id="wanted-language" className="text-slate-400">
+                {" · "}
+                {t("wanted_language_hint", {
+                  langs: langPref.preferred.map(langLabel).join(", "),
+                  mode: t(
+                    langPref.mode === "require"
+                      ? "s_language_mode_require"
+                      : "s_language_mode_prefer",
+                  ).toLowerCase(),
+                })}
+              </span>
+            )}
+          </>
+        }
       >
         <select
           id="wanted-filter"
