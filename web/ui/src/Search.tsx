@@ -176,6 +176,29 @@ function Cover({ result }: { result: SearchResult }) {
     </div>
   );
 }
+// 48×64 thumbnail for the list view, rendered only when the source gives a
+// cover: a row without one keeps the score in its first column, no blank.
+// On error it falls back to the same coloured initial as the cards.
+function Thumb({ result }: { result: SearchResult }) {
+  const [failed, setFailed] = useState(false);
+  const box = "h-16 w-12 shrink-0 rounded";
+  return !failed ? (
+    <img
+      src={result.cover_url}
+      className={`${box} object-cover bg-slate-800`}
+      alt=""
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  ) : (
+    <div
+      aria-hidden="true"
+      className={`${box} bg-gradient-to-br from-indigo-600 to-purple-700 flex items-center justify-center text-base font-bold text-white/70`}
+    >
+      {result.title.charAt(0).toUpperCase()}
+    </div>
+  );
+}
 // Items separated by " · ", skipping the empty ones.
 function Dots({ items }: { items: ReactNode[] }) {
   const shown = items.filter(
@@ -418,6 +441,13 @@ function ResultRow(p: RowProps) {
   const { t } = useTranslation();
   const { result } = p;
   const confidence = confidenceKey(result.score_breakdown?.confidence);
+  const score = (
+    <Score
+      value={result.score}
+      label={confidence ? t(confidence) : undefined}
+      title={scoreTitle(result, t)}
+    />
+  );
   return (
     <ListRow
       className={`book-card result-row cursor-pointer hover:border-slate-600 ${p.blocked ? "opacity-60" : ""}`}
@@ -431,11 +461,14 @@ function ResultRow(p: RowProps) {
         p.onDetails();
       }}
       leading={
-        <Score
-          value={result.score}
-          label={confidence ? t(confidence) : undefined}
-          title={scoreTitle(result, t)}
-        />
+        result.cover_url ? (
+          <div className="flex items-start gap-2">
+            <Thumb result={result} />
+            {score}
+          </div>
+        ) : (
+          score
+        )
       }
       actions={
         <>
