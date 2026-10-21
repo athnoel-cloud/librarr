@@ -1,4 +1,11 @@
-import { FormEvent, StrictMode, useEffect, useState } from "react";
+import {
+  FormEvent,
+  StrictMode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { createRoot } from "react-dom/client";
 import {
   api,
@@ -13,13 +20,14 @@ import {
   type WantedOutcome,
   type WishlistItem,
 } from "./api";
-import { text } from "./i18n/wanted";
 import { Library } from "./Library";
 import { Downloads, activeStatuses } from "./Downloads";
 import { AuthSettings } from "./AuthSettings";
 import { AccountSettings } from "./AccountSettings";
 import { GeneralSettings } from "./GeneralSettings";
 import { LOCALES, useTranslation, type Locale } from "./i18n";
+import { langLabel } from "./lang";
+import { translateReason } from "./reasons";
 import { Search, type SearchIntent } from "./Search";
 import {
   Badge,
@@ -28,6 +36,8 @@ import {
   ListRow,
   PageHeader,
   StatusBadge,
+  Toasts,
+  type ToastItem,
   type Tone,
 } from "./ui";
 import "./style.css";
@@ -79,12 +89,32 @@ function App(): React.JSX.Element {
     window.addEventListener("keydown", keys);
     return () => window.removeEventListener("keydown", keys);
   }, []);
-  const [notice, setNotice] = useState("");
+  // Notices stack (three at most), close on click or after 6 s; the same
+  // text twice refreshes the existing toast instead of doubling it. Children
+  // keep the plain `setNotice(text)` call they always had.
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const toastId = useRef(0);
+  const dismiss = useCallback(
+    (id: number) => setToasts((old) => old.filter((item) => item.id !== id)),
+    [],
+  );
+  const setNotice = useCallback(
+    (text: string) => {
+      if (!text) return;
+      const id = ++toastId.current;
+      setToasts((old) =>
+        [...old.filter((item) => item.text !== text), { id, text }].slice(-3),
+      );
+      window.setTimeout(() => dismiss(id), 6000);
+    },
+    [dismiss],
+  );
+  const notice = toasts[toasts.length - 1]?.text ?? "";
   const refreshAuth = async (): Promise<void> =>
     setAuth(await authStatus());
   useEffect(() => {
     void refreshAuth().catch((e: unknown) =>
-      setNotice(e instanceof Error ? e.message : "Unable to reach Librarr"),
+      setNotice(e instanceof Error ? e.message : t("app_unreachable")),
     );
   }, []);
   useEffect(() => {
@@ -139,15 +169,15 @@ function App(): React.JSX.Element {
             <p role="alert">{notice}</p>
             <button
               onClick={() => {
-                setNotice("");
+                setToasts([]);
                 void refreshAuth().catch((e) => setNotice(String(e)));
               }}
             >
-              Retry
+              {t("retry")}
             </button>
           </>
         ) : (
-          "Loading Librarr…"
+          t("app_loading")
         )}
       </main>
     );
@@ -156,7 +186,8 @@ function App(): React.JSX.Element {
       <AuthScreen
         auth={auth}
         onAuthenticated={refreshAuth}
-        notice={notice}
+        toasts={toasts}
+        onDismiss={dismiss}
         setNotice={setNotice}
       />
     );
@@ -165,14 +196,14 @@ function App(): React.JSX.Element {
       id="app"
       className="min-h-screen bg-slate-950 text-slate-200 font-sans"
     >
-      <Toast text={notice} />
+      <Toasts items={toasts} closeLabel={t("close")} onClose={dismiss} />
       <header className="relative bg-slate-900 border-b border-slate-800">
         <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between">
           <div className="flex items-center gap-2">
             <button
               className="hamburger-btn"
               data-action="toggleMobileNav"
-              aria-label="Navigation menu"
+              aria-label={t("nav_menu")}
               aria-expanded={mobileNav}
               aria-controls="main-nav"
               onClick={() => setMobileNav(!mobileNav)}
@@ -204,7 +235,7 @@ function App(): React.JSX.Element {
             <select
               id="language-select"
               data-action="selectLanguage"
-              aria-label="Language"
+              aria-label={t("language_select")}
               value={locale}
               onChange={(e) => setLanguage(e.target.value as Locale)}
               className="bg-slate-800 text-slate-100 border border-slate-600 rounded px-2 py-1 text-sm"
@@ -232,7 +263,7 @@ function App(): React.JSX.Element {
         </div>
         <nav
           id="main-nav"
-          aria-label="Primary navigation"
+          aria-label={t("nav_primary")}
           className={`max-w-7xl mx-auto px-2 flex flex-wrap gap-1 ${mobileNav ? "mobile-open" : ""}`}
         >
           {tabs.map((item) => (
@@ -292,33 +323,20 @@ function App(): React.JSX.Element {
   );
 }
 
-function Toast({ text }: { text: string }): React.JSX.Element {
-  return (
-    <div
-      id="toast-container"
-      aria-live="polite"
-      className="fixed bottom-4 right-4 z-50"
-    >
-      {text && (
-        <p className="bg-slate-800 border border-slate-600 rounded-lg px-4 py-3">
-          {text}
-        </p>
-      )}
-    </div>
-  );
-}
-
 function AuthScreen({
   auth,
   onAuthenticated,
-  notice,
+  toasts,
+  onDismiss,
   setNotice,
 }: {
   auth: AuthStatus;
   onAuthenticated: () => Promise<void>;
-  notice: string;
+  toasts: ToastItem[];
+  onDismiss: (id: number) => void;
   setNotice: (message: string) => void;
 }): React.JSX.Element {
+  const { t } = useTranslation();
   const [view, setView] = useState<AuthView>(
     auth.has_users ? "login" : "register",
   );
@@ -335,7 +353,7 @@ function AuthScreen({
   async function login(event: FormEvent): Promise<void> {
     event.preventDefault();
     if (!username.trim() || !password)
-      return setNotice("Username and password are required");
+      return setNotice(t("err_credentials_required"));
     setBusy(true);
     try {
       const result = await api<LoginResponse>("/api/login", {
@@ -343,7 +361,7 @@ function AuthScreen({
         body: JSON.stringify({ username: username.trim(), password }),
       });
       if (!result.success)
-        return setNotice(result.error ?? "Invalid credentials");
+        return setNotice(result.error ?? t("err_invalid_credentials"));
       if (result.needs_totp) {
         setPending(result.session_pending ?? "");
         setCode("");
@@ -351,9 +369,9 @@ function AuthScreen({
         return;
       }
       await onAuthenticated();
-      setNotice("Signed in");
+      setNotice(t("signed_in"));
     } catch (e) {
-      setNotice(e instanceof Error ? e.message : "Connection failed");
+      setNotice(e instanceof Error ? e.message : t("err_connection"));
     } finally {
       setBusy(false);
     }
@@ -361,7 +379,7 @@ function AuthScreen({
   async function register(event: FormEvent): Promise<void> {
     event.preventDefault();
     if (!username.trim() || !password)
-      return setNotice("Username and password are required");
+      return setNotice(t("err_credentials_required"));
     setBusy(true);
     try {
       const result = await api<RegisterResponse>("/api/register", {
@@ -373,41 +391,39 @@ function AuthScreen({
         }),
       });
       if (!result.success)
-        return setNotice(result.error ?? "Registration failed");
+        return setNotice(result.error ?? t("registration_failed"));
       if (result.token) {
         await onAuthenticated();
-        setNotice("Administrator account created");
+        setNotice(t("admin_created"));
       } else {
         setPassword("");
         setInvite("");
         setView("login");
-        setNotice("Account created. Sign in to continue.");
+        setNotice(t("account_created"));
       }
     } catch (e) {
-      setNotice(e instanceof Error ? e.message : "Connection failed");
+      setNotice(e instanceof Error ? e.message : t("err_connection"));
     } finally {
       setBusy(false);
     }
   }
   async function verifyTOTP(event: FormEvent): Promise<void> {
     event.preventDefault();
-    if (!code.trim())
-      return setNotice("Enter your authenticator or backup code");
+    if (!code.trim()) return setNotice(t("totp_enter_any"));
     setBusy(true);
     try {
       const result = await api<LoginResponse>("/api/login/totp", {
         method: "POST",
         body: JSON.stringify({ session_pending: pending, code: code.trim() }),
       });
-      if (!result.success) return setNotice(result.error ?? "Invalid code");
+      if (!result.success)
+        return setNotice(result.error ?? t("err_invalid_code"));
       await onAuthenticated();
       setNotice(
-        result.backup_code_used
-          ? "Signed in; a backup code was used."
-          : "Signed in",
+        result.backup_code_used ? t("backup_code_used") : t("signed_in"),
       );
     } catch (e) {
-      setNotice(e instanceof Error ? e.message : "Connection failed");
+      setNotice(e instanceof Error ? e.message : t("err_connection"));
     } finally {
       setBusy(false);
     }
@@ -417,7 +433,7 @@ function AuthScreen({
       id="login-modal"
       className="min-h-screen bg-slate-950 flex items-center justify-center p-4"
     >
-      <Toast text={notice} />
+      <Toasts items={toasts} closeLabel={t("close")} onClose={onDismiss} />
       <section
         className="bg-slate-900 border border-slate-700 rounded-xl p-8 w-full max-w-md shadow-2xl"
         aria-labelledby="auth-title"
@@ -428,36 +444,36 @@ function AuthScreen({
         <p id="login-subtitle" className="text-sm text-slate-400 mb-5">
           {view === "register"
             ? auth.has_users
-              ? "Create your account"
-              : "Create your administrator account"
+              ? t("create_your_account")
+              : t("create_admin_account")
             : view === "totp"
-              ? "Two-factor authentication"
-              : "Sign in to continue"}
+              ? t("s_totp_title")
+              : t("login_subtitle")}
         </p>
         {!auth.has_users && (
           <p id="first-run-banner" className="mb-4 text-sm text-indigo-200">
-            First-run setup: the first account becomes administrator.
+            {t("first_run_banner")}
           </p>
         )}
         {view === "login" && (
           <form id="login-form" onSubmit={login} className="space-y-4">
             <Field
               id="login-username"
-              label="Username"
+              label={t("label_username")}
               value={username}
               onChange={setUsername}
               autoComplete="username"
             />
             <Field
               id="login-password"
-              label="Password"
+              label={t("label_password")}
               value={password}
               onChange={setPassword}
               type="password"
               autoComplete="current-password"
             />
             <button type="submit" disabled={busy}>
-              {busy ? "Signing in…" : "Sign in"}
+              {busy ? t("signing_in") : t("login_sign_in")}
             </button>
             {auth.oidc_enabled && (
               <a
@@ -465,17 +481,19 @@ function AuthScreen({
                 href="/auth/oidc/login"
                 className="block text-center"
               >
-                Continue with {auth.oidc_provider_name || "SSO"}
+                {t("login_with", {
+                  provider: auth.oidc_provider_name || "SSO",
+                })}
               </a>
             )}
             <p id="login-register-link">
-              No account?{" "}
+              {t("login_no_account_text")}{" "}
               <button
                 type="button"
                 data-action="showRegisterForm"
                 onClick={() => setView("register")}
               >
-                Register
+                {t("login_register")}
               </button>
             </p>
           </form>
@@ -484,14 +502,14 @@ function AuthScreen({
           <form id="register-form" onSubmit={register} className="space-y-4">
             <Field
               id="register-username"
-              label="Username"
+              label={t("label_username")}
               value={username}
               onChange={setUsername}
               autoComplete="username"
             />
             <Field
               id="register-password"
-              label="Password"
+              label={t("label_password")}
               value={password}
               onChange={setPassword}
               type="password"
@@ -499,13 +517,13 @@ function AuthScreen({
             />
             <Field
               id="register-invite-code"
-              label="Invite code"
+              label={t("label_invite_code")}
               value={invite}
               onChange={setInvite}
               hidden={!auth.has_users}
             />
             <button type="submit" disabled={busy}>
-              {busy ? "Creating…" : "Create account"}
+              {busy ? t("creating") : t("create_account")}
             </button>
             {auth.has_users && (
               <button
@@ -513,7 +531,7 @@ function AuthScreen({
                 data-action="showLoginForm"
                 onClick={() => setView("login")}
               >
-                Back to sign in
+                {t("back_to_login")}
               </button>
             )}
           </form>
@@ -522,13 +540,13 @@ function AuthScreen({
           <form id="totp-form" onSubmit={verifyTOTP} className="space-y-4">
             <Field
               id="totp-code"
-              label="Authenticator or backup code"
+              label={t("totp_code_any_label")}
               value={code}
               onChange={setCode}
               autoComplete="one-time-code"
             />
             <button type="submit" disabled={busy}>
-              {busy ? "Verifying…" : "Verify"}
+              {busy ? t("verifying") : t("totp_verify")}
             </button>
             <button
               type="button"
@@ -538,7 +556,7 @@ function AuthScreen({
                 setView("login");
               }}
             >
-              Back to sign in
+              {t("back_to_login")}
             </button>
           </form>
         )}
@@ -600,13 +618,13 @@ function WantedOutcomeTable({
       <div className="flex flex-wrap items-start justify-between gap-2">
         <p className="text-sm text-slate-300">
           <strong className="text-slate-100">{outcome.action ?? ""}</strong> —{" "}
-          {outcome.reason ?? ""}
+          <span title={outcome.reason ?? ""}>
+            {translateReason(locale, outcome.reason)}
+          </span>
           {outcome.candidate && (
             <span className="text-slate-400"> ({outcome.candidate})</span>
           )}
-          {dryRun && (
-            <span className="text-slate-400"> {text(locale, "dry_run")}</span>
-          )}
+          {dryRun && <span className="text-slate-400"> {t("dry_run")}</span>}
         </p>
         <Button
           size="sm"
@@ -660,8 +678,11 @@ function WantedOutcomeTable({
                       {decision.source ?? ""}
                     </span>
                   </td>
-                  <td className="py-1 whitespace-normal">
-                    {decision.reason ?? ""}
+                  <td
+                    className="py-1 whitespace-normal"
+                    title={decision.reason ?? ""}
+                  >
+                    {translateReason(locale, decision.reason)}
                   </td>
                 </tr>
               ))}
@@ -722,6 +743,35 @@ function Wanted({
     Record<number, { outcome: WantedOutcome; dryRun: boolean }>
   >({});
   const [upgrades, setUpgrades] = useState(true);
+  // Reminder of the active language preference. /api/settings is admin-only
+  // and older servers do not expose the keys: the reminder is simply absent.
+  const [langPref, setLangPref] = useState<{
+    preferred: string[];
+    mode: "prefer" | "require";
+  }>();
+  useEffect(() => {
+    if (!admin) return;
+    let active = true;
+    void api<{ language_preferred?: string; language_mode?: string }>(
+      "/api/settings",
+    )
+      .then((settings) => {
+        if (!active) return;
+        setLangPref({
+          preferred: String(settings.language_preferred ?? "")
+            .split(",")
+            .map((code) => code.trim().toLowerCase())
+            .filter(Boolean),
+          mode: settings.language_mode === "require" ? "require" : "prefer",
+        });
+      })
+      .catch(() => {
+        /* Optional hint: the list works without it. */
+      });
+    return () => {
+      active = false;
+    };
+  }, [admin]);
   const load = async () => {
     try {
       const [wanted, quality] = await Promise.all([
@@ -737,7 +787,7 @@ function Wanted({
       setUpgrades(wanted.upgrades_enabled !== false);
       setProfiles(quality);
     } catch (e) {
-      setNotice(e instanceof Error ? e.message : "Load failed");
+      setNotice(e instanceof Error ? e.message : t("load_failed"));
     }
   };
   useEffect(() => {
@@ -754,7 +804,7 @@ function Wanted({
       });
       await load();
     } catch (e) {
-      setNotice(e instanceof Error ? e.message : "Update failed");
+      setNotice(e instanceof Error ? e.message : t("update_failed"));
       await load();
     }
   };
@@ -766,28 +816,51 @@ function Wanted({
       );
       const outcome = response.outcome ?? {};
       setDetails((previous) => ({ ...previous, [id]: { outcome, dryRun } }));
-      setNotice(`Search finished: ${outcome.reason ?? outcome.action ?? ""}`);
+      setNotice(
+        t("wanted_search_started", {
+          reason: translateReason(locale, outcome.reason ?? outcome.action),
+        }),
+      );
       await load();
     } catch (e) {
-      setNotice(e instanceof Error ? e.message : "Search failed");
+      setNotice(
+        t("search_failed", { msg: e instanceof Error ? e.message : String(e) }),
+      );
     }
   };
   const shown = items.filter((item) => !filter || item.state === filter);
   const summary = items.length
-    ? ["missing", "upgrade", "downloading", "satisfied", "unmonitored"]
+    ? wantedStates
         .filter((state) => counts[state])
         .map(
           (state) =>
-            `${counts[state]} ${text(locale, `wanted_state_${state}`).toLowerCase()}`,
+            `${counts[state]} ${t(`wanted_state_${state}`).toLowerCase()}`,
         )
         .join(" · ")
-    : text(locale, "wanted_intro");
+    : t("wanted_intro");
   const field = "grid gap-1 text-sm text-slate-300";
   return (
     <section id="tab-wishlist" className="tab-content active">
       <PageHeader
         title={t("wishlist_title")}
-        subtitle={<span id="wanted-summary">{summary}</span>}
+        subtitle={
+          <>
+            <span id="wanted-summary">{summary}</span>
+            {langPref && langPref.preferred.length > 0 && (
+              <span id="wanted-language" className="text-slate-400">
+                {" · "}
+                {t("wanted_language_hint", {
+                  langs: langPref.preferred.map(langLabel).join(", "),
+                  mode: t(
+                    langPref.mode === "require"
+                      ? "s_language_mode_require"
+                      : "s_language_mode_prefer",
+                  ).toLowerCase(),
+                })}
+              </span>
+            )}
+          </>
+        }
       >
         <select
           id="wanted-filter"
@@ -919,7 +992,7 @@ function Wanted({
         <EmptyState
           id="wishlist-empty"
           title={t("wishlist_empty")}
-          hint={text(locale, "wanted_intro")}
+          hint={t("wanted_intro")}
         />
       )}
       <div id="wishlist-list">
@@ -1064,7 +1137,9 @@ function Wanted({
                   className="mt-1 text-sm text-slate-300"
                   title={item.last_result}
                 >
-                  {t("wanted_last", { result: item.last_result })}
+                  {t("wanted_last", {
+                    result: translateReason(locale, item.last_result),
+                  })}
                 </p>
               )}
             </ListRow>
@@ -1082,7 +1157,7 @@ function Settings({
   admin: boolean;
   setNotice: (message: string) => void;
 }): React.JSX.Element {
-  const { locale } = useTranslation();
+  const { t } = useTranslation();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [formats, setFormats] = useState<Record<string, string[]>>({});
   const [authors, setAuthors] = useState<Author[]>([]);
@@ -1104,7 +1179,7 @@ function Settings({
       setFormats(known.formats);
       setAuthors(monitored.authors ?? []);
     } catch (e) {
-      setNotice(e instanceof Error ? e.message : "Settings failed");
+      setNotice(e instanceof Error ? e.message : t("settings_failed"));
     }
   };
   useEffect(() => {
@@ -1130,7 +1205,7 @@ function Settings({
       );
       await load();
     } catch (e) {
-      setNotice(e instanceof Error ? e.message : "Profile save failed");
+      setNotice(e instanceof Error ? e.message : t("profile_save_failed"));
     }
   };
   const edit = (id: Profile["id"], fn: (profile: Profile) => Profile) =>
@@ -1145,24 +1220,19 @@ function Settings({
       const summary = result.error
         ? result.error
         : result.baseline
-          ? text(locale, "author_baseline", { seen: result.seen ?? 0 })
+          ? t("author_baseline", { seen: result.seen ?? 0 })
           : [
-              text(locale, "author_new", { count: result.new?.length ?? 0 }),
-              result.added
-                ? text(locale, "author_added", { count: result.added })
-                : "",
+              t("author_new", { count: result.new?.length ?? 0 }),
+              result.added ? t("author_added", { count: result.added }) : "",
             ]
               .filter(Boolean)
               .join(", ");
       setNotice(
-        text(locale, "author_checked", {
-          author: result.author ?? "",
-          summary,
-        }),
+        t("author_checked", { author: result.author ?? "", summary }),
       );
       await load();
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Failed to save");
+      setNotice(error instanceof Error ? error.message : t("failed_save"));
     }
   };
   return (
@@ -1187,14 +1257,17 @@ function Settings({
             ])
           }
         >
-          New profile
+          {t("profile_new")}
         </button>
         <select
+          aria-label={t("media_type_label")}
           value={media}
           onChange={(e) => setMedia(e.target.value as MediaType)}
         >
           {(["ebook", "audiobook", "manga"] as const).map((x) => (
-            <option key={x}>{x}</option>
+            <option key={x} value={x}>
+              {t(`opt_${x}`)}
+            </option>
           ))}
         </select>
       </div>
@@ -1208,7 +1281,7 @@ function Settings({
                 edit(profile.id, (p) => ({ ...p, name: e.target.value }))
               }
             />
-            {profile.builtin && <span>Built-in</span>}
+            {profile.builtin && <span>{t("profile_builtin")}</span>}
             <div data-qp-ranking>
               {profile.format_ranking.map((format, index) => (
                 <div data-qp-row={format} key={format}>
@@ -1283,7 +1356,9 @@ function Settings({
                       }))
                     }
                   />
-                  {format.toUpperCase()} · not grabbed
+                  {t("profile_format_not_grabbed", {
+                    format: format.toUpperCase(),
+                  })}
                 </label>
               ))}
             <select
@@ -1311,10 +1386,10 @@ function Settings({
                   }))
                 }
               />
-              Upgrade until cutoff
+              {t("profile_upgrades")}
             </label>
             <label>
-              Preferred size (MiB){" "}
+              {t("profile_size_range")}{" "}
               <input
                 data-field="preferred_size_min"
                 type="number"
@@ -1328,7 +1403,7 @@ function Settings({
                   }))
                 }
               />
-              <span>to</span>
+              <span>{t("size_to")}</span>
               <input
                 data-field="preferred_size_max"
                 type="number"
@@ -1347,13 +1422,17 @@ function Settings({
               data-action="qpSave"
               onClick={() => void saveProfile(profile)}
             >
-              Save
+              {t("save")}
             </button>
             {!profile.builtin && (
               <button
                 data-action="qpDelete"
                 onClick={() => {
-                  if (!window.confirm(`Delete profile ${profile.name}?`))
+                  if (
+                    !window.confirm(
+                      t("confirm_delete_profile", { name: profile.name }),
+                    )
+                  )
                     return;
                   if (typeof profile.id === "string") {
                     setProfiles((old) =>
@@ -1368,7 +1447,7 @@ function Settings({
                     .catch((e) => setNotice(String(e)));
                 }}
               >
-                Delete
+                {t("delete")}
               </button>
             )}
           </article>
@@ -1377,11 +1456,13 @@ function Settings({
       <div>
         <input
           id="author-name"
+          aria-label={t("s_author_name")}
+          placeholder={t("s_author_name")}
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
         <label>
-          Check interval (days)
+          {t("s_author_interval")}
           <input
             id="author-interval"
             type="number"
@@ -1397,7 +1478,7 @@ function Settings({
             checked={authorAutoAdd}
             onChange={(e) => setAuthorAutoAdd(e.target.checked)}
           />{" "}
-          Automatically add new works
+          {t("s_author_auto_add")}
         </label>
         <button
           data-action="addAuthor"
@@ -1417,15 +1498,15 @@ function Settings({
               .catch((e) => setNotice(String(e)))
           }
         >
-          Follow
+          {t("s_author_follow")}
         </button>
         {authors.map((a) => (
           <article data-author-id={a.id} key={a.id}>
             <strong>{a.name}</strong>
             <p className="text-xs text-slate-400">
               {a.seen_works
-                ? `${a.seen_works} works known · ${a.last_checked && !a.last_checked.startsWith("0001") ? new Date(a.last_checked).toLocaleString() : "never"}`
-                : "not checked yet"}
+                ? `${t("author_works_known", { n: a.seen_works })} · ${a.last_checked && !a.last_checked.startsWith("0001") ? new Date(a.last_checked).toLocaleString() : t("never").toLowerCase()}`
+                : t("author_never_checked")}
             </p>
             <input
               data-action-change="authorInterval"
@@ -1465,24 +1546,24 @@ function Settings({
                     });
                 }}
               />
-              auto-add
+              {t("author_auto_add_short")}
             </label>
             <button
               data-action="checkAuthor"
               onClick={() => void checkAuthor(a.id)}
             >
-              Check now
+              {t("author_check_now")}
             </button>
             <button
               data-action="deleteAuthor"
               onClick={() => {
-                if (window.confirm(`Unfollow ${a.name}?`))
+                if (window.confirm(t("confirm_unfollow", { name: a.name })))
                   void api(`/api/authors/${a.id}`, { method: "DELETE" })
                     .then(load)
                     .catch((e) => setNotice(String(e)));
               }}
             >
-              Unfollow
+              {t("author_unfollow")}
             </button>
           </article>
         ))}

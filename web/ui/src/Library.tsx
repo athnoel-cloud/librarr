@@ -31,8 +31,10 @@ function seriesBaseName(series = ""): string {
     .replace(/\s*,\s*$/, "")
     .trim();
 }
+// Empty when the item has no usable title; callers substitute the
+// translated "Unknown title".
 function displayTitle(item: LibraryItem): string {
-  return item.title || item.name || "Unknown";
+  return item.title || item.name || "";
 }
 function initials(title: string): string {
   return (
@@ -65,7 +67,7 @@ function Cover({
   index: number;
 }): React.JSX.Element {
   const [failed, setFailed] = useState(false);
-  const title = displayTitle(item);
+  const title = displayTitle(item) || "?";
   if (!item.cover_url || failed)
     return (
       <div
@@ -100,7 +102,7 @@ function Card({
   removing: boolean;
 }): React.JSX.Element {
   const { t } = useTranslation();
-  const title = displayTitle(item);
+  const title = displayTitle(item) || t("unknown_title");
   const format =
     item.file_format || item.format || item.file_path?.match(/\.([^./\\]+)$/)?.[1] || "";
   return (
@@ -109,8 +111,8 @@ function Card({
       {item.id != null && !item.kavita_url && (
         <button
           data-action="deleteLibraryItem"
-          title="Remove from library"
-          aria-label="Remove from library"
+          title={t("library_remove")}
+          aria-label={t("library_remove")}
           disabled={removing}
           onClick={() => remove(item)}
           className="absolute top-2 right-2 w-11 h-11 rounded-full bg-slate-950/80 text-white hover:bg-red-700 disabled:opacity-50"
@@ -248,11 +250,12 @@ export function Library({
     return { groups: [...groups], standalone };
   }, [items]);
   const remove = async (item: LibraryItem) => {
+    const title = displayTitle(item) || t("unknown_title");
     if (
       removing ||
       item.id == null ||
       item.kavita_url ||
-      !window.confirm(`Remove "${displayTitle(item)}" from library?`)
+      !window.confirm(t("confirm_remove_library", { title }))
     )
       return;
     const type = category === "audiobooks"
@@ -264,11 +267,13 @@ export function Library({
       await api(`/api/library/${type}/${encodeURIComponent(item.id)}${suffix}`, {
         method: "DELETE",
       });
-      setNotice(`Removed "${displayTitle(item)}"`);
+      setNotice(t("library_removed", { title }));
       setRevision((value) => value + 1);
     } catch (error) {
       setNotice(
-        `Failed to remove: ${error instanceof Error ? error.message : "unknown error"}`,
+        t("library_remove_failed", {
+          msg: error instanceof Error ? error.message : t("unknown_error"),
+        }),
       );
     } finally {
       setRemoving(false);
@@ -291,7 +296,11 @@ export function Library({
   return (
     <section id="tab-library" className="tab-content active">
       <div className="library-toolbar">
-        <div className="library-categories" role="group" aria-label="Library category">
+        <div
+          className="library-categories"
+          role="group"
+          aria-label={t("library_category_label")}
+        >
           {(["ebooks", "audiobooks", "manga"] as const).map((value) => (
             <button
               key={value}
@@ -357,7 +366,7 @@ export function Library({
       {pages > 1 && (
         <nav
           id="library-pagination"
-          aria-label="Library pages"
+          aria-label={t("library_pages_label")}
           className="mt-4 flex flex-wrap items-center gap-2"
         >
           <button

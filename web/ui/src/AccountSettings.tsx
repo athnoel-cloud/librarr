@@ -33,13 +33,18 @@ const button =
 function message(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
-async function mutate(path: string, method: string, body?: unknown) {
+// `fallback` is the translated message used when the server gives none.
+async function mutate(
+  path: string,
+  method: string,
+  fallback: string,
+  body?: unknown,
+) {
   const result = await api<Result>(path, {
     method,
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
-  if (!result.success)
-    throw new Error(result.error || "The change could not be saved.");
+  if (!result.success) throw new Error(result.error || fallback);
 }
 
 export function AccountSettings() {
@@ -68,6 +73,7 @@ export function AccountSettings() {
   );
 }
 function PasswordSettings() {
+  const { t } = useTranslation();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -78,27 +84,27 @@ function PasswordSettings() {
     setError("");
     setNotice("");
     if (!current || !next || !confirm) {
-      setError("All three fields are required");
+      setError(t("cp_all_required"));
       return;
     }
     if (next.length < 6) {
-      setError("New password must be at least 6 characters");
+      setError(t("cp_min_length"));
       return;
     }
     if (next !== confirm) {
-      setError("New password and confirmation do not match");
+      setError(t("cp_mismatch"));
       return;
     }
     setBusy(true);
     try {
-      await mutate("/api/me/password", "POST", {
+      await mutate("/api/me/password", "POST", t("change_failed"), {
         current_password: current,
         new_password: next,
       });
       setCurrent("");
       setNext("");
       setConfirm("");
-      setNotice("Password changed.");
+      setNotice(t("cp_changed"));
     } catch (error) {
       setError(message(error));
     } finally {
@@ -107,7 +113,7 @@ function PasswordSettings() {
   }
   return (
     <section id="change-password-section" className={card}>
-      <h3 className="text-lg font-semibold text-white">Change password</h3>
+      <h3 className="text-lg font-semibold text-white">{t("cp_title")}</h3>
       <form
         id="change-password-form"
         className="space-y-3"
@@ -117,7 +123,7 @@ function PasswordSettings() {
         }}
       >
         <label className="block">
-          Current password
+          {t("cp_current")}
           <input
             id="cp-current"
             className={input}
@@ -128,7 +134,7 @@ function PasswordSettings() {
           />
         </label>
         <label className="block">
-          New password
+          {t("cp_new")}
           <input
             id="cp-new"
             className={input}
@@ -139,7 +145,7 @@ function PasswordSettings() {
           />
         </label>
         <label className="block">
-          Confirm new password
+          {t("cp_confirm")}
           <input
             id="cp-confirm"
             className={input}
@@ -160,7 +166,7 @@ function PasswordSettings() {
           </p>
         )}
         <button disabled={busy} className={button}>
-          {busy ? "Saving…" : "Change password"}
+          {busy ? t("saving") : t("cp_title")}
         </button>
       </form>
     </section>
@@ -184,7 +190,7 @@ function UserSettings() {
       api<Result & { invites?: Invite[] }>("/api/invites"),
     ]);
     if (!userData.success)
-      throw new Error(userData.error || "Failed to load users");
+      throw new Error(userData.error || t("failed_load_users"));
     setUsers(userData.users || []);
     setInvites(inviteData.invites || []);
   }
@@ -211,7 +217,7 @@ function UserSettings() {
       return;
     }
     await action(async () => {
-      await mutate("/api/register", "POST", {
+      await mutate("/api/register", "POST", t("change_failed"), {
         username: username.trim(),
         password,
       });
@@ -222,14 +228,16 @@ function UserSettings() {
   async function copy(code: string) {
     try {
       await navigator.clipboard.writeText(code);
-      setNotice("Copied");
+      setNotice(t("copied"));
     } catch {
-      setError("Copy failed — select the code manually");
+      setError(t("copy_failed_manual"));
     }
   }
   return (
     <section id="user-management" className={card}>
-      <h3 className="text-lg font-semibold text-white">User management</h3>
+      <h3 className="text-lg font-semibold text-white">
+        {t("s_user_mgmt_title")}
+      </h3>
       {error && (
         <p role="alert" className="text-red-400">
           {error}
@@ -261,14 +269,14 @@ function UserSettings() {
             </div>
             <div className="flex gap-2">
               <select
-                aria-label={`Role for ${user.username}`}
+                aria-label={t("role_for", { username: user.username })}
                 value={user.role}
                 disabled={busy}
                 className="bg-slate-700 rounded px-2"
                 onChange={(event) =>
                   void action(
                     () =>
-                      mutate(`/api/users/${user.id}`, "PATCH", {
+                      mutate(`/api/users/${user.id}`, "PATCH", t("change_failed"), {
                         role: event.target.value,
                       }),
                     t("user_role_updated"),
@@ -288,12 +296,13 @@ function UserSettings() {
                     )
                   )
                     void action(
-                      () => mutate(`/api/users/${user.id}`, "DELETE"),
+                      () =>
+                        mutate(`/api/users/${user.id}`, "DELETE", t("change_failed")),
                       t("user_deleted"),
                     );
                 }}
               >
-                Delete {user.username}
+                {t("delete_user", { username: user.username })}
               </button>
             </div>
           </div>
@@ -307,7 +316,7 @@ function UserSettings() {
         }}
       >
         <label className="flex-1 min-w-0">
-          Username
+          {t("label_username")}
           <input
             id="new-user-name"
             className={input}
@@ -317,7 +326,7 @@ function UserSettings() {
           />
         </label>
         <label className="flex-1 min-w-0">
-          Password
+          {t("label_password")}
           <input
             id="new-user-pass"
             className={input}
@@ -328,12 +337,12 @@ function UserSettings() {
           />
         </label>
         <button disabled={busy} className={button}>
-          Add user
+          {t("add_user")}
         </button>
       </form>
-      <h4 className="font-semibold">Invite codes</h4>
+      <h4 className="font-semibold">{t("invite_codes")}</h4>
       <div id="invite-codes-list" className="space-y-2">
-        {!invites.length && <p>No invite codes yet.</p>}
+        {!invites.length && <p>{t("no_invites")}</p>}
         {invites.map((invite) => (
           <div
             key={invite.id}
@@ -344,33 +353,37 @@ function UserSettings() {
                 {invite.code}
               </code>
               <p className="text-xs text-slate-400">
-                role: {invite.role} · uses: {invite.uses} / {invite.max_uses} ·
-                expires:{" "}
-                {invite.expires_at
-                  ? new Date(invite.expires_at * 1000).toLocaleDateString()
-                  : "Never"}
+                {t("invite_meta", {
+                  role: t(invite.role === "admin" ? "role_admin" : "role_user"),
+                  uses: invite.uses,
+                  max: invite.max_uses,
+                  expires: invite.expires_at
+                    ? new Date(invite.expires_at * 1000).toLocaleDateString()
+                    : t("never"),
+                })}
               </p>
             </div>
             <div className="flex gap-2">
               <button className={button} onClick={() => void copy(invite.code)}>
-                Copy
+                {t("copy")}
               </button>
               <button
                 disabled={busy}
                 className="px-3 rounded bg-red-800"
                 onClick={() => {
-                  if (
-                    window.confirm(
-                      "Revoke this invite code? Anyone with it will no longer be able to register.",
-                    )
-                  )
+                  if (window.confirm(t("confirm_revoke_invite")))
                     void action(
-                      () => mutate(`/api/invites/${invite.id}`, "DELETE"),
-                      "Invite revoked",
+                      () =>
+                        mutate(
+                          `/api/invites/${invite.id}`,
+                          "DELETE",
+                          t("change_failed"),
+                        ),
+                      t("invite_revoked"),
                     );
                 }}
               >
-                Revoke
+                {t("revoke")}
               </button>
             </div>
           </div>
@@ -382,17 +395,17 @@ function UserSettings() {
           event.preventDefault();
           void action(
             () =>
-              mutate("/api/invites", "POST", {
+              mutate("/api/invites", "POST", t("change_failed"), {
                 role,
                 max_uses: maxUses,
                 expires_in: days * 86400,
               }),
-            "Invite code generated",
+            t("invite_generated"),
           );
         }}
       >
         <label>
-          Role
+          {t("label_role")}
           <select
             id="invite-role"
             className={input}
@@ -401,12 +414,12 @@ function UserSettings() {
               setRole(event.target.value === "admin" ? "admin" : "user")
             }
           >
-            <option value="user">User</option>
-            <option value="admin">Admin</option>
+            <option value="user">{t("role_user")}</option>
+            <option value="admin">{t("role_admin")}</option>
           </select>
         </label>
         <label>
-          Maximum uses
+          {t("invite_max_uses")}
           <input
             id="invite-max-uses"
             className={input}
@@ -418,7 +431,7 @@ function UserSettings() {
           />
         </label>
         <label>
-          Expires in days (0 = never)
+          {t("invite_expires_days")}
           <input
             id="invite-expires-days"
             className={input}
@@ -430,7 +443,7 @@ function UserSettings() {
           />
         </label>
         <button disabled={busy} className={button}>
-          Generate invite
+          {t("generate_invite")}
         </button>
       </form>
     </section>

@@ -176,6 +176,29 @@ function Cover({ result }: { result: SearchResult }) {
     </div>
   );
 }
+// 48×64 thumbnail for the list view, rendered only when the source gives a
+// cover: a row without one keeps the score in its first column, no blank.
+// On error it falls back to the same coloured initial as the cards.
+function Thumb({ result }: { result: SearchResult }) {
+  const [failed, setFailed] = useState(false);
+  const box = "h-16 w-12 shrink-0 rounded";
+  return !failed ? (
+    <img
+      src={result.cover_url}
+      className={`${box} object-cover bg-slate-800`}
+      alt=""
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  ) : (
+    <div
+      aria-hidden="true"
+      className={`${box} bg-gradient-to-br from-indigo-600 to-purple-700 flex items-center justify-center text-base font-bold text-white/70`}
+    >
+      {result.title.charAt(0).toUpperCase()}
+    </div>
+  );
+}
 // Items separated by " · ", skipping the empty ones.
 function Dots({ items }: { items: ReactNode[] }) {
   const shown = items.filter(
@@ -408,12 +431,23 @@ function releaseMenu(p: RowProps, t: Translate): MenuItem[] {
     });
   return items;
 }
+// The whole release name is the information (language, format, group live in
+// it), so it wraps as far as it must: no clamp, no fixed height, dotted names
+// break anywhere. style.css repeats the rule by id in case the runtime
+// Tailwind skips an arbitrary property.
 const titleButton =
-  "text-left min-h-0 rounded hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 [overflow-wrap:anywhere]";
+  "block w-full text-left min-h-0 rounded hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 whitespace-normal break-words [overflow-wrap:anywhere]";
 function ResultRow(p: RowProps) {
   const { t } = useTranslation();
   const { result } = p;
   const confidence = confidenceKey(result.score_breakdown?.confidence);
+  const score = (
+    <Score
+      value={result.score}
+      label={confidence ? t(confidence) : undefined}
+      title={scoreTitle(result, t)}
+    />
+  );
   return (
     <ListRow
       className={`book-card result-row cursor-pointer hover:border-slate-600 ${p.blocked ? "opacity-60" : ""}`}
@@ -427,11 +461,14 @@ function ResultRow(p: RowProps) {
         p.onDetails();
       }}
       leading={
-        <Score
-          value={result.score}
-          label={confidence ? t(confidence) : undefined}
-          title={scoreTitle(result, t)}
-        />
+        result.cover_url ? (
+          <div className="flex items-start gap-2">
+            <Thumb result={result} />
+            {score}
+          </div>
+        ) : (
+          score
+        )
       }
       actions={
         <>
@@ -483,9 +520,10 @@ function ResultCard(p: RowProps) {
   const confidence = confidenceKey(result.score_breakdown?.confidence);
   return (
     <article
-      className={`book-card bg-slate-900 border border-slate-700 rounded-xl overflow-hidden flex flex-col ${p.blocked ? "opacity-60" : ""}`}
+      className={`book-card bg-slate-900 border border-slate-700 rounded-xl flex flex-col ${p.blocked ? "opacity-60" : ""}`}
     >
-      <div className="relative">
+      {/* Only the cover clips: the card itself grows with its title and lets the ⋯ menu overhang. */}
+      <div className="relative overflow-hidden rounded-t-xl">
         <Cover result={result} />
         <span className="absolute top-2 left-2 bg-slate-800 text-white text-xs px-2 py-1 rounded">
           {result.source}
@@ -498,7 +536,7 @@ function ResultCard(p: RowProps) {
         <div className="flex items-start gap-2">
           <h3
             title={result.title}
-            className="text-sm font-medium text-slate-100 flex-1 min-w-0 [overflow-wrap:anywhere]"
+            className="text-sm font-medium text-slate-100 flex-1 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]"
           >
             <button
               type="button"

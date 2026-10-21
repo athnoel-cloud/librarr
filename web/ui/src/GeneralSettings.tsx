@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "./api";
-import { useTranslation } from "./i18n";
+import { useTranslation, type TranslationKey } from "./i18n";
+import { LANG_LABEL, type LangCode } from "./lang";
+import { Button } from "./ui";
 type Value = string | number | boolean | null;
 type Settings = Record<string, Value>;
 interface Result {
@@ -52,18 +54,72 @@ const integrations = [
   ["komga", "Komga", ["komga_url", "komga_user", "komga_pass"]],
   ["calibre", "Calibre", ["calibre_url", "calibre_library_path"]],
 ] as const;
+// Setting key → catalogue key of its label.
 const toggles = [
-  ["scheduler_enabled", "Run the wanted scheduler"],
-  ["scheduler_auto_download", "Automatically download wanted matches"],
-  ["auto_upgrade_enabled", "Enable quality upgrades"],
-  ["upgrade_keep_old_files", "Keep old files after upgrades"],
-  ["author_monitor_enabled", "Monitor followed authors"],
+  ["scheduler_enabled", "s_sched_enabled"],
+  ["scheduler_auto_download", "s_sched_auto_download"],
+  ["auto_upgrade_enabled", "s_auto_upgrade"],
+  ["upgrade_keep_old_files", "s_keep_old"],
+  ["author_monitor_enabled", "s_authors_enabled"],
 ] as const;
 const numbers = [
-  ["scheduler_interval_hours", "Scheduler interval (hours)", 1],
-  ["scheduler_min_score", "Minimum match score", 0],
-  ["scheduler_item_delay_seconds", "Delay between items (seconds)", 0],
+  ["scheduler_interval_hours", "s_sched_interval", 1],
+  ["scheduler_min_score", "s_sched_min_score", 0],
+  ["scheduler_item_delay_seconds", "s_sched_delay", 0],
 ] as const;
+// Human labels for the integration fields; anything unknown falls back to
+// the key with its underscores spaced out.
+const fieldLabels: Record<string, TranslationKey> = {
+  annas_archive_domain: "f_domain",
+  annas_archive_secret_key: "f_secret_key",
+  prowlarr_url: "f_url",
+  prowlarr_api_key: "f_api_key",
+  qb_url: "f_url",
+  qb_user: "label_username",
+  qb_pass: "label_password",
+  transmission_url: "f_url",
+  transmission_user: "label_username",
+  transmission_pass: "label_password",
+  torrent_client: "f_torrent_client",
+  sabnzbd_url: "f_url",
+  sabnzbd_api_key: "f_api_key",
+  sabnzbd_category: "f_category",
+  abs_url: "f_url",
+  abs_token: "f_token",
+  kavita_url: "f_url",
+  kavita_user: "label_username",
+  kavita_pass: "label_password",
+  kavita_ebook_library_id: "f_ebook_library_id",
+  kavita_manga_library_id: "f_manga_library_id",
+  komga_url: "f_url",
+  komga_user: "label_username",
+  komga_pass: "label_password",
+  calibre_url: "f_url",
+  calibre_library_path: "f_library_path",
+};
+const importDescriptions: Record<string, TranslationKey> = {
+  move: "import_desc_move",
+  hardlink: "import_desc_hardlink",
+  copy: "import_desc_copy",
+};
+// Fixed display order; the CSV sent to the server follows it too.
+const languages: readonly LangCode[] = [
+  "fr",
+  "multi",
+  "en",
+  "de",
+  "es",
+  "it",
+  "ru",
+  "ja",
+];
+// "French first": FR and MULTi get the bonus, the format still decides,
+// nothing is rejected.
+const frenchFirst = {
+  language_preferred: "fr,multi",
+  language_mode: "prefer",
+  language_bonus: 30,
+} as const;
 const box = "bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3";
 const input =
   "block w-full min-w-0 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2";
@@ -111,8 +167,7 @@ export function GeneralSettings() {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      if (!result.success)
-        throw new Error(result.error || "Failed to save settings");
+      if (!result.success) throw new Error(result.error || t("failed_save"));
       if (reload) {
         const fresh = await api<Settings>("/api/settings");
         setData((old) => ({
@@ -128,8 +183,10 @@ export function GeneralSettings() {
       }
       setNotice(
         name === "integration"
-          ? "Saved. Restart the container for new URLs/credentials to take effect."
-          : t("settings_saved"),
+          ? t("settings_saved_restart")
+          : name === "language-preset"
+            ? t("s_language_preset_applied")
+            : t("settings_saved"),
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -154,12 +211,37 @@ export function GeneralSettings() {
       }));
     }
   }
+  // Language preference (GET/POST /api/settings: language_preferred CSV,
+  // language_mode prefer|require, language_bonus number). Absent keys — an
+  // older server — fall back to "nothing preferred".
+  const preferred = languages.filter((code) =>
+    String(data.language_preferred ?? "")
+      .split(",")
+      .map((item) => item.trim().toLowerCase())
+      .includes(code),
+  );
+  const languageMode = data.language_mode === "require" ? "require" : "prefer";
+  const languageBonus = Number(data.language_bonus ?? frenchFirst.language_bonus);
+  const languagePayload = () => ({
+    language_preferred: preferred.join(","),
+    language_mode: languageMode,
+    language_bonus: Number.isFinite(languageBonus) ? languageBonus : 0,
+  });
+  function togglePreferred(code: LangCode, on: boolean) {
+    const next = languages.filter((item) =>
+      item === code ? on : preferred.includes(item),
+    );
+    edit("language_preferred", next.join(","));
+  }
+  async function applyFrenchFirst() {
+    setData((old) => ({ ...old, ...frenchFirst }));
+    await save("language-preset", { ...frenchFirst }, true);
+  }
   const effective = String(data.effective_import_mode || "");
-  const descriptions: Record<string, string> = {
-    move: "Imports move files into the library — a kept torrent could not seed.",
-    hardlink:
-      "Imports hardlink into the library — kept torrents keep seeding, at no extra disk.",
-    copy: "Imports copy into the library — kept torrents keep seeding, using twice the disk.",
+  const effectiveDescription = importDescriptions[effective];
+  const fieldLabel = (key: string) => {
+    const label = fieldLabels[key];
+    return label ? t(label) : key.replaceAll("_", " ");
   };
   return (
     <div className="space-y-4">
@@ -174,9 +256,9 @@ export function GeneralSettings() {
         </p>
       )}
       <section className={box}>
-        <h3 className="text-lg font-semibold">Downloads and imports</h3>
+        <h3 className="text-lg font-semibold">{t("s_downloads_title")}</h3>
         <label className="block">
-          Import mode
+          {t("import_mode")}
           <select
             id="setting-import_mode"
             className={input}
@@ -186,10 +268,10 @@ export function GeneralSettings() {
               void save("import", { import_mode: e.target.value }, true)
             }
           >
-            <option value="">Automatic</option>
-            <option value="move">Move</option>
-            <option value="hardlink">Hardlink</option>
-            <option value="copy">Copy</option>
+            <option value="">{t("import_mode_auto")}</option>
+            <option value="move">{t("import_mode_move")}</option>
+            <option value="hardlink">{t("import_mode_hardlink")}</option>
+            <option value="copy">{t("import_mode_copy")}</option>
           </select>
         </label>
         <p
@@ -201,11 +283,11 @@ export function GeneralSettings() {
           }
         >
           {data.import_mode === "" && effective
-            ? `Automatic → ${effective}. `
+            ? `${t("import_mode_auto_effective", { mode: effective })} `
             : ""}
-          {descriptions[effective]}
+          {effectiveDescription ? t(effectiveDescription) : ""}
           {effective === "move" && data.remove_torrent_after_import === false
-            ? " Pick Hardlink above, or turn the setting below back on."
+            ? ` ${t("import_pick_hardlink")}`
             : ""}
         </p>
         <label className="block">
@@ -222,7 +304,7 @@ export function GeneralSettings() {
               )
             }
           />{" "}
-          Remove torrents after import
+          {t("remove_torrent_after_import")}
         </label>
         <label className="block">
           <input
@@ -251,13 +333,13 @@ export function GeneralSettings() {
               checked={data[key] === true}
               onChange={(e) => edit(key, e.target.checked)}
             />{" "}
-            {label}
+            {t(label)}
           </label>
         ))}
         <div className="grid gap-3 sm:grid-cols-3">
           {numbers.map(([key, label, min]) => (
             <label key={key}>
-              {label}
+              {t(label)}
               <input
                 id={`setting-${key}`}
                 className={input}
@@ -286,7 +368,7 @@ export function GeneralSettings() {
             )
           }
         >
-          Save
+          {t("save")}
         </button>
         <p id="scheduler-status" className="text-sm text-slate-400">
           {scheduler.last_run
@@ -294,8 +376,99 @@ export function GeneralSettings() {
             : ""}
         </p>
       </section>
+      <section id="language-settings" className={box}>
+        <h3 className="text-lg font-semibold">{t("s_language_title")}</h3>
+        <p className="text-sm text-slate-400 max-w-prose">
+          {t("s_language_desc")}
+        </p>
+        <fieldset>
+          <legend className="text-sm text-slate-300 mb-1">
+            {t("s_language_preferred")}
+          </legend>
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {languages.map((code) => (
+              <label
+                key={code}
+                className="inline-flex items-center min-h-[2.75rem] sm:min-h-0 text-sm cursor-pointer"
+              >
+                <input
+                  id={`setting-language-${code}`}
+                  type="checkbox"
+                  checked={preferred.includes(code)}
+                  disabled={!!busy}
+                  onChange={(e) => togglePreferred(code, e.target.checked)}
+                />
+                <span className="font-medium">{LANG_LABEL[code]}</span>
+                <span className="text-slate-400">
+                  &nbsp;· {t(`lang_name_${code}`)}
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-sm">
+            {t("s_language_mode")}
+            <select
+              id="setting-language_mode"
+              className={input}
+              value={languageMode}
+              disabled={!!busy}
+              onChange={(e) => edit("language_mode", e.target.value)}
+            >
+              <option value="prefer">{t("s_language_mode_prefer")}</option>
+              <option value="require">{t("s_language_mode_require")}</option>
+            </select>
+          </label>
+          <label className="block text-sm">
+            {t("s_language_bonus")}
+            <input
+              id="setting-language_bonus"
+              className={input}
+              type="number"
+              min={0}
+              max={100}
+              value={Number.isFinite(languageBonus) ? languageBonus : 0}
+              disabled={!!busy}
+              onChange={(e) => edit("language_bonus", Number(e.target.value))}
+            />
+          </label>
+        </div>
+        <p
+          id="language-mode-help"
+          className="text-sm text-slate-400 max-w-prose"
+        >
+          {preferred.length
+            ? t(
+                languageMode === "require"
+                  ? "s_language_mode_require_help"
+                  : "s_language_mode_prefer_help",
+              )
+            : t("s_language_none_help")}{" "}
+          {t("s_language_bonus_help")}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="primary"
+            data-action="saveLanguageSettings"
+            disabled={!!busy}
+            onClick={() => void save("language", languagePayload(), true)}
+          >
+            {t("save")}
+          </Button>
+          <Button
+            variant="secondary"
+            data-action="languagePresetFrench"
+            disabled={!!busy}
+            title={t("s_language_preset_french_help")}
+            onClick={() => void applyFrenchFirst()}
+          >
+            {t("s_language_preset_french")}
+          </Button>
+        </div>
+      </section>
       <section className={box}>
-        <h3 className="text-lg font-semibold">Integrations</h3>
+        <h3 className="text-lg font-semibold">{t("s_integrations")}</h3>
         <div className="grid gap-4 md:grid-cols-2">
           {integrations.map(([name, label, fields]) => (
             <form
@@ -316,7 +489,7 @@ export function GeneralSettings() {
               <h4 className="font-semibold">{label}</h4>
               {fields.map((key) => (
                 <label key={key} className="block text-sm">
-                  {key.replaceAll("_", " ")}
+                  {fieldLabel(key)}
                   {key === "torrent_client" ? (
                     <select
                       id={`setting-${key}`}
@@ -350,7 +523,7 @@ export function GeneralSettings() {
                   data-action="saveIntegration"
                   data-arg={name}
                 >
-                  Save
+                  {t("save")}
                 </button>
                 {!["annas", "komga", "calibre"].includes(name) && (
                   <button
@@ -360,7 +533,7 @@ export function GeneralSettings() {
                     data-arg={name}
                     onClick={() => void test(name)}
                   >
-                    Test connection
+                    {t("test_connection")}
                   </button>
                 )}
               </div>
@@ -372,7 +545,7 @@ export function GeneralSettings() {
         </div>
       </section>
       <section className={box}>
-        <h3 className="text-lg font-semibold">Sources</h3>
+        <h3 className="text-lg font-semibold">{t("s_search_sources")}</h3>
         <div id="sources-list" className="space-y-2">
           {sources.map((source, index) => (
             <div
@@ -391,7 +564,7 @@ export function GeneralSettings() {
         </div>
       </section>
       <section className={box}>
-        <h3 className="text-lg font-semibold">Configuration</h3>
+        <h3 className="text-lg font-semibold">{t("s_configuration")}</h3>
         <div id="config-info">
           {Object.entries(config)
             .filter(

@@ -465,3 +465,48 @@ export function DetailPanel({
     </div>
   );
 }
+
+export interface ToastItem {
+  id: number;
+  text: string;
+}
+
+// Stack of notices, oldest on top, each closable. The caller owns the queue
+// (cap, auto-dismiss) so this stays a view; the container keeps the
+// #toast-container / aria-live contract the journeys read.
+export function Toasts({
+  items,
+  closeLabel,
+  onClose,
+}: {
+  items: ToastItem[];
+  closeLabel: string;
+  onClose: (id: number) => void;
+}) {
+  return (
+    <div
+      id="toast-container"
+      aria-live="polite"
+      className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-2"
+    >
+      {items.map((item) => (
+        <div
+          key={item.id}
+          data-toast
+          className="toast-enter pointer-events-auto flex items-start gap-3 max-w-[24rem] rounded-lg border border-slate-600 bg-slate-800 px-4 py-3 text-sm text-slate-100 shadow-xl"
+        >
+          <span className="min-w-0 [overflow-wrap:anywhere]">{item.text}</span>
+          <button
+            type="button"
+            aria-label={closeLabel}
+            title={closeLabel}
+            onClick={() => onClose(item.id)}
+            className="shrink-0 -my-1 -mr-2 h-8 w-8 rounded-md text-slate-300 hover:bg-slate-700 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
+          >
+            <span aria-hidden="true">✕</span>
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
