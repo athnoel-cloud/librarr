@@ -49,6 +49,9 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, _ *http.Request) {
 		"mangadex_enabled":            s.cfg.MangaDexEnabled,
 		"max_retries":                 s.cfg.MaxRetries,
 		"foreign_lang_filter":         s.searchMgr.ForeignLangFilterEnabled(),
+		"language_preferred":          strings.Join(s.cfg.LanguagePreferred, ","),
+		"language_mode":               s.cfg.LanguageMode,
+		"language_bonus":              s.cfg.LanguageBonus,
 		"flibusta_enabled":            s.cfg.FlibustaEnabled,
 		"flibusta_url":                s.cfg.FlibustaURL,
 		"zlibrary_enabled":            s.cfg.ZLibraryEnabled,
@@ -197,6 +200,17 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 			s.cfg.RemoveTorrentAfterImport = b
 			slog.Info("remove torrent after import updated", "enabled", b)
 		}
+	}
+	if v, ok := data["language_preferred"].(string); ok {
+		s.cfg.LanguagePreferred = config.SplitLanguages(v)
+		slog.Info("language preference updated", "preferred", s.cfg.LanguagePreferred)
+	}
+	if v, ok := data["language_mode"].(string); ok && (v == "prefer" || v == "require") {
+		s.cfg.LanguageMode = v
+		slog.Info("language mode updated", "mode", v)
+	}
+	if v, ok := data["language_bonus"].(float64); ok && v >= 0 {
+		s.cfg.LanguageBonus = v
 	}
 	// An empty value is the automatic mode, so it is applied like any other —
 	// the merge above has already dropped the override from settings.json.

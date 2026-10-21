@@ -31,8 +31,22 @@ type Manager struct {
 	health        *search.HealthTracker
 	webhookSender *webhook.Sender
 
+	importStates importStateSource
+
 	mu   sync.Mutex
 	jobs map[string]*models.DownloadJob
+}
+
+// importStateSource is what the completion watcher knows about finished
+// torrents; wired after construction because the watcher is created later.
+type importStateSource interface {
+	ImportState(hash string) (ImportState, bool)
+}
+
+// SetImportStateSource lets the downloads list report what the watcher did
+// with each finished torrent.
+func (m *Manager) SetImportStateSource(src importStateSource) {
+	m.importStates = src
 }
 
 // SetWebhookSender sets the webhook sender for download notifications.
@@ -524,7 +538,7 @@ func (m *Manager) GetDownloads() []models.DownloadStatus {
 				continue
 			}
 			for _, t := range torrents {
-				downloads = append(downloads, models.DownloadStatus{
+				d := models.DownloadStatus{
 					Source:   cat.label,
 					Title:    t.Name,
 					Status:   MapTorrentStatus(t.State),
@@ -532,7 +546,13 @@ func (m *Manager) GetDownloads() []models.DownloadStatus {
 					Size:     search.HumanSize(t.TotalSize),
 					Speed:    search.HumanSize(t.DlSpeed) + "/s",
 					Hash:     t.Hash,
-				})
+				}
+				if m.importStates != nil {
+					if st, ok := m.importStates.ImportState(t.Hash); ok {
+						d.ImportState, d.ImportDetail = st.State, st.Detail
+					}
+				}
+				downloads = append(downloads, d)
 			}
 		}
 	}

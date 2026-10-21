@@ -799,3 +799,25 @@ func TestImportEbookRoutesComicArchiveToManga(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// The downloads list can tell what the watcher did with a finished torrent.
+func TestImportTorrentRecordsImportState(t *testing.T) {
+	w, _, _, info := newImportFixture(t, config.ImportModeHardlink, true, false)
+
+	w.importTorrent(info, "ebook")
+	if st, ok := w.ImportState(info.Hash); !ok || st.State != "imported" {
+		t.Fatalf("state after a successful import = %+v (ok=%v), want imported", st, ok)
+	}
+
+	// A finished torrent whose folder librarr cannot see stays pending, with the reason.
+	w2, _, _, info2 := newImportFixture(t, config.ImportModeHardlink, true, false)
+	info2.Hash, info2.Name, info2.ContentPath = "missing-hash", "Missing Release", "/downloads/Missing Release"
+	w2.importTorrent(info2, "ebook")
+	st, ok := w2.ImportState(info2.Hash)
+	if !ok || st.State != "pending" || !strings.Contains(st.Detail, "not visible") {
+		t.Fatalf("state for an unusable payload = %+v (ok=%v), want pending with the reason", st, ok)
+	}
+	if _, ok := w2.ImportState("unknown-hash"); ok {
+		t.Fatal("unknown hash must have no state")
+	}
+}

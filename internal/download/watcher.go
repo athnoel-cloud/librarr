@@ -33,6 +33,7 @@ type Watcher struct {
 	processing    sync.Map // hash -> struct{}, tracks in-progress imports
 	imported      sync.Map // hash -> struct{}, tracks already-imported hashes
 	processingNZB sync.Map // nzo_id -> struct{}, tracks in-progress NZB imports
+	importStates  sync.Map // hash -> ImportState, what the watcher last did with a finished torrent
 }
 
 var errTorrentContentPending = errors.New("torrent content pending synchronization")
@@ -120,19 +121,44 @@ func (w *Watcher) checkCompleted() {
 	}
 }
 
+// ImportState is what the completion watcher last did with a finished torrent,
+// exposed on the downloads list so a torrent that sits "completed" in the
+// client but was never imported says why.
+type ImportState struct {
+	State  string    `json:"state"` // pending, importing, imported, failed
+	Detail string    `json:"detail,omitempty"`
+	Since  time.Time `json:"since"`
+}
+
+// ImportState returns the watcher's last decision for a torrent hash.
+func (w *Watcher) ImportState(hash string) (ImportState, bool) {
+	v, ok := w.importStates.Load(hash)
+	if !ok {
+		return ImportState{}, false
+	}
+	return v.(ImportState), true
+}
+
+func (w *Watcher) setImportState(hash, state, detail string) {
+	w.importStates.Store(hash, ImportState{State: state, Detail: detail, Since: time.Now()})
+}
+
 func (w *Watcher) importTorrent(t TorrentInfo, mediaType string) {
 	defer w.processing.Delete(t.Hash)
 
 	slog.Debug("processing completed torrent", "name", t.Name, "hash", t.Hash, "type", mediaType)
 
 	savePath := w.resolveLocalPath(t, mediaType)
+	w.setImportState(t.Hash, "importing", "")
 
 	var importErr error
 	if _, err := os.Stat(savePath); err != nil {
 		if os.IsNotExist(err) {
 			slog.Info("torrent import pending", "name", t.Name, "hash", t.Hash, "type", mediaType, "path", savePath, "reason", "local synchronized path not available")
+			w.setImportState(t.Hash, "pending", "download folder not visible to librarr: "+savePath)
 		} else {
 			slog.Warn("torrent import pending", "name", t.Name, "hash", t.Hash, "type", mediaType, "path", savePath, "error", err)
+			w.setImportState(t.Hash, "pending", err.Error())
 		}
 		return
 	}
@@ -149,11 +175,14 @@ func (w *Watcher) importTorrent(t TorrentInfo, mediaType string) {
 	if importErr != nil {
 		if errors.Is(importErr, errTorrentContentPending) {
 			slog.Info("torrent import pending", "name", t.Name, "hash", t.Hash, "type", mediaType, "path", savePath, "error", importErr)
+			w.setImportState(t.Hash, "pending", importErr.Error())
 		} else {
 			slog.Error("torrent import failed", "name", t.Name, "type", mediaType, "error", importErr)
+			w.setImportState(t.Hash, "failed", importErr.Error())
 		}
 		return
 	}
+	w.setImportState(t.Hash, "imported", "")
 
 	// Optionally remove the torrent from the client after import. Default is to
 	// remove; set REMOVE_TORRENT_AFTER_IMPORT=false to keep the torrent — which

@@ -414,7 +414,7 @@ func buildFromEnv() *Config {
 		BookTrackerEnabled: getEnvBool("BOOKTRACKER_ENABLED", false),
 
 		ForeignLangFilter: getEnvBool("FOREIGN_LANG_FILTER", true),
-		LanguagePreferred: splitCSV(strings.ToLower(getEnv("LANGUAGE_PREFERRED", ""))),
+		LanguagePreferred: SplitLanguages(getEnv("LANGUAGE_PREFERRED", "")),
 		LanguageMode:      strings.ToLower(getEnv("LANGUAGE_MODE", "prefer")),
 		LanguageBonus:     float64(getEnvInt("LANGUAGE_BONUS", 30)),
 
@@ -599,6 +599,18 @@ func (c *Config) applySettingsFileOverrides() {
 		return
 	}
 
+	// Language preference: a comma-separated list in settings.json, a mode
+	// restricted to its two values, and a numeric bonus.
+	if v, ok := raw["language_preferred"].(string); ok {
+		c.LanguagePreferred = SplitLanguages(v)
+	}
+	if v, ok := raw["language_mode"].(string); ok && (v == "prefer" || v == "require") {
+		c.LanguageMode = v
+	}
+	if v, ok := raw["language_bonus"].(float64); ok && v >= 0 {
+		c.LanguageBonus = v
+	}
+
 	strPtrs := map[string]*string{
 		"qb_url":                    &c.QBUrl,
 		"qb_user":                   &c.QBUser,
@@ -754,6 +766,12 @@ func firstNonEmpty(values ...string) string {
 }
 
 // splitCSV splits a comma-separated value into trimmed, non-empty entries.
+// SplitLanguages parses a comma-separated list of language codes ("fr, MULTi")
+// into lower-case codes, dropping empty entries.
+func SplitLanguages(s string) []string {
+	return splitCSV(strings.ToLower(s))
+}
+
 func splitCSV(s string) []string {
 	if strings.TrimSpace(s) == "" {
 		return nil

@@ -246,4 +246,9 @@ type DownloadStatus struct {
 	Detail     string  `json:"detail,omitempty"`
 	RetryCount int     `json:"retry_count,omitempty"`
 	MaxRetries int     `json:"max_retries,omitempty"`
+	// ImportState tells what the completion watcher did with a finished
+	// torrent: "pending" (content not usable yet, see ImportDetail),
+	// "importing", "imported" or "failed". Empty when not yet examined.
+	ImportState  string `json:"import_state,omitempty"`
+	ImportDetail string `json:"import_detail,omitempty"`
 }
