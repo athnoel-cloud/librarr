@@ -275,6 +275,11 @@ function Meta({ result, lang }: { result: SearchResult; lang?: DetectedLang }) {
             </span>
           ),
           result.indexer && <span>{result.indexer}</span>,
+          result.category && (
+            <span className="result-category" title={t("d_category")}>
+              {result.category}
+            </span>
+          ),
           text && <span className="whitespace-nowrap">{text}</span>,
           (!!result.seeders || !!result.leechers) && (
             <span className="tabular-nums whitespace-nowrap">
@@ -608,6 +613,7 @@ function ResultDetail({
   const confidence = confidenceKey(breakdown?.confidence);
   const rows: [string, ReactNode][] = [
     [t("d_indexer"), result.indexer || result.source],
+    [t("d_category"), result.category || "—"],
     [t("d_size"), sizeText(result) || "—"],
     [
       t("d_peers"),

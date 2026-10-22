@@ -262,7 +262,7 @@ func TestProwlarr_CategoriesForTab(t *testing.T) {
 	}{
 		{"main", []string{"7000", "7020"}},
 		{"audiobook", []string{"3030"}},
-		{"manga", []string{"7020", "7030"}},
+		{"manga", []string{"7000", "7020", "7030"}},
 	}
 
 	for _, tt := range tests {

@@ -222,7 +222,7 @@ func (m *Manager) ProcessResults(results []models.SearchResult, query, author st
 
 func (m *Manager) processResults(results []models.SearchResult, query, author string) []models.SearchResult {
 	results = FilterResults(results, query, m.ForeignLangFilterEnabled())
-	results = FilterAndSortResults(results, query, m.cfg.MinTorrentSizeBytes, m.cfg.MaxTorrentSizeBytes)
+	results = FilterAndSortResults(results, query, m.cfg.MinTorrentSizeBytes, m.cfg.MaxTorrentSizeBytes, m.cfg.MinSeeders)
 	results = ScoreResults(results, query, author)
 	// Direct sources report a language; indexer releases only carry it as a
 	// tag in their name. Fill it so the UI and the scheduler see one field.

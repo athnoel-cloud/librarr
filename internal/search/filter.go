@@ -62,7 +62,7 @@ func titleRelevanceScore(title, query string) int {
 	return 0
 }
 
-func FilterAndSortResults(results []models.SearchResult, query string, minSize, maxSize int64) []models.SearchResult {
+func FilterAndSortResults(results []models.SearchResult, query string, minSize, maxSize int64, minSeeders int) []models.SearchResult {
 	var filtered []models.SearchResult
 	seenTitles := make(map[string]int) // normalized title -> index in filtered
 
@@ -87,7 +87,10 @@ func FilterAndSortResults(results []models.SearchResult, query string, minSize, 
 		// valid magnets). Usenet has no seeders at all: Prowlarr omits the key,
 		// r.Seeders unmarshals to 0, and applying this to an NZB silently drops
 		// every usenet result the indexers returned.
-		if isTorrent && r.Seeders < 1 {
+		// minSeeders 0 keeps dead-looking torrents: indexers reached through an
+		// API (YggTorrent...) report no seeder count at all, so 0 means
+		// "unknown" as often as "dead", and the value is shown to the user.
+		if isTorrent && r.Seeders < minSeeders {
 			continue
 		}
 

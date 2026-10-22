@@ -96,7 +96,7 @@ func TestFilterAndSortResults(t *testing.T) {
 			{Source: "annas", Title: "Good Book"},
 			{Source: "annas", Title: "Bad keygen exe"},
 		}
-		filtered := FilterAndSortResults(results, "book", 10000, 2000000000)
+		filtered := FilterAndSortResults(results, "book", 10000, 2000000000, 1)
 		if len(filtered) != 1 {
 			t.Fatalf("expected 1 result, got %d", len(filtered))
 		}
@@ -110,9 +110,20 @@ func TestFilterAndSortResults(t *testing.T) {
 			{Source: "torrent", Title: "Good Torrent", Seeders: 5, Size: 50000},
 			{Source: "torrent", Title: "Dead Torrent", Seeders: 0, Size: 50000},
 		}
-		filtered := FilterAndSortResults(results, "torrent", 10000, 2000000000)
+		filtered := FilterAndSortResults(results, "torrent", 10000, 2000000000, 1)
 		if len(filtered) != 1 {
 			t.Fatalf("expected 1 result, got %d", len(filtered))
+		}
+	})
+
+	t.Run("keeps zero-seeder torrents when the threshold is 0", func(t *testing.T) {
+		results := []models.SearchResult{
+			{Source: "torrent", Title: "Good Torrent", Seeders: 5, Size: 50000},
+			{Source: "torrent", Title: "Unknown Seeders", Seeders: 0, Size: 50000},
+		}
+		filtered := FilterAndSortResults(results, "torrent", 10000, 2000000000, 0)
+		if len(filtered) != 2 {
+			t.Fatalf("expected both results with MIN_SEEDERS=0, got %d", len(filtered))
 		}
 	})
 
@@ -122,7 +133,7 @@ func TestFilterAndSortResults(t *testing.T) {
 			{Source: "torrent", Title: "Just Right", Seeders: 5, Size: 500000},
 			{Source: "torrent", Title: "Too Big", Seeders: 5, Size: 5000000000},
 		}
-		filtered := FilterAndSortResults(results, "test", 10000, 2000000000)
+		filtered := FilterAndSortResults(results, "test", 10000, 2000000000, 1)
 		if len(filtered) != 1 {
 			t.Fatalf("expected 1 result, got %d", len(filtered))
 		}
@@ -136,7 +147,7 @@ func TestFilterAndSortResults(t *testing.T) {
 			{Source: "torrent", Title: "Same Book", Seeders: 3, Size: 50000},
 			{Source: "torrent", Title: "Same Book", Seeders: 10, Size: 50000},
 		}
-		filtered := FilterAndSortResults(results, "same book", 10000, 2000000000)
+		filtered := FilterAndSortResults(results, "same book", 10000, 2000000000, 1)
 		if len(filtered) != 1 {
 			t.Fatalf("expected 1 result after dedup, got %d", len(filtered))
 		}
@@ -155,7 +166,7 @@ func TestFilterAndSortResults(t *testing.T) {
 			{Source: "torrent", Title: "Live Torrent", Seeders: 5, Size: 50000, DownloadProtocol: "torrent"},
 			{Source: "torrent", Title: "Dead Torrent", Seeders: 0, Size: 50000, DownloadProtocol: "torrent"},
 		}
-		filtered := FilterAndSortResults(results, "usenet", 10000, 2000000000)
+		filtered := FilterAndSortResults(results, "usenet", 10000, 2000000000, 1)
 		if len(filtered) != 3 {
 			t.Fatalf("expected 3 results, got %d", len(filtered))
 		}
@@ -175,7 +186,7 @@ func TestFilterAndSortResults(t *testing.T) {
 			{Source: "torrent", Title: "Sane NZB", Seeders: 0, Size: 500000, DownloadProtocol: "nzb"},
 			{Source: "torrent", Title: "Huge NZB", Seeders: 0, Size: 5000000000, DownloadProtocol: "nzb"},
 		}
-		filtered := FilterAndSortResults(results, "nzb", 10000, 2000000000)
+		filtered := FilterAndSortResults(results, "nzb", 10000, 2000000000, 1)
 		if len(filtered) != 1 {
 			t.Fatalf("expected 1 result, got %d", len(filtered))
 		}
@@ -191,7 +202,7 @@ func TestFilterAndSortResults(t *testing.T) {
 			{Source: "torrent", Title: "Same Book", Seeders: 0, Size: 50000, DownloadProtocol: "nzb", Indexer: "one"},
 			{Source: "torrent", Title: "Same Book", Seeders: 0, Size: 50000, DownloadProtocol: "nzb", Indexer: "two"},
 		}
-		filtered := FilterAndSortResults(results, "same book", 10000, 2000000000)
+		filtered := FilterAndSortResults(results, "same book", 10000, 2000000000, 1)
 		if len(filtered) != 1 {
 			t.Fatalf("expected 1 result after dedup, got %d", len(filtered))
 		}
@@ -207,7 +218,7 @@ func TestFilterAndSortResults(t *testing.T) {
 			{Source: "audiobook", Title: "Some Book B", Seeders: 0, Size: 50000, AbbURL: "/x"},
 			{Source: "torrent", Title: "Some Book A", Seeders: 0, Size: 50000, DownloadProtocol: "nzb"},
 		}
-		filtered := FilterAndSortResults(results, "some book", 10000, 2000000000)
+		filtered := FilterAndSortResults(results, "some book", 10000, 2000000000, 1)
 		if len(filtered) != 2 {
 			t.Fatalf("expected 2 results, got %d", len(filtered))
 		}
@@ -221,7 +232,7 @@ func TestFilterAndSortResults(t *testing.T) {
 			{Source: "gutenberg", Title: "Other Book"},
 			{Source: "annas", Title: "The Great Gatsby"},
 		}
-		filtered := FilterAndSortResults(results, "The Great Gatsby", 10000, 2000000000)
+		filtered := FilterAndSortResults(results, "The Great Gatsby", 10000, 2000000000, 1)
 		if len(filtered) < 2 {
 			t.Fatalf("expected 2 results, got %d", len(filtered))
 		}
@@ -235,7 +246,7 @@ func TestFilterAndSortResults(t *testing.T) {
 		results := []models.SearchResult{
 			{Source: "audiobook", Title: "Audiobook Title", Seeders: 0, AbbURL: "/some/path"},
 		}
-		filtered := FilterAndSortResults(results, "audiobook", 10000, 2000000000)
+		filtered := FilterAndSortResults(results, "audiobook", 10000, 2000000000, 1)
 		if len(filtered) != 1 {
 			t.Errorf("expected ABB with abb_url to pass filter, got %d results", len(filtered))
 		}
@@ -245,7 +256,7 @@ func TestFilterAndSortResults(t *testing.T) {
 		results := []models.SearchResult{
 			{Source: "audiobook", Title: "Dead Audiobook", Seeders: 0, AbbURL: ""},
 		}
-		filtered := FilterAndSortResults(results, "audiobook", 10000, 2000000000)
+		filtered := FilterAndSortResults(results, "audiobook", 10000, 2000000000, 1)
 		if len(filtered) != 0 {
 			t.Errorf("expected ABB without abb_url and 0 seeders to be filtered, got %d", len(filtered))
 		}

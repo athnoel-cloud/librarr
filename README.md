@@ -467,6 +467,7 @@ values saved there persist in `settings.json` and override the environment.
 | `SCHEDULER_INTERVAL_HOURS` | `24` | Hours between passes |
 | `SCHEDULER_AUTO_DOWNLOAD` | `false` | Grab the best acceptable release (otherwise only notify) |
 | `SCHEDULER_MIN_SCORE` | `70` | Minimum match confidence (0-100); the profile ranks what passes |
+| `MIN_SEEDERS` | `0` | Drop torrent results below this seeder count. Indexers reached through an API (YggTorrent, for one) report no seeder count at all, so the default keeps every result and shows the value |
 | `LANGUAGE_PREFERRED` | | Comma-separated language codes the scheduler prefers (`fr`, `en`, `multi`, `de`, `es`, `it`, `ru`, `ja`). Every result gets a `language` read from the release name tags (`FRENCH`, `VFF`, `MULTi`, `ENGLISH`, …); untagged releases stay unknown and are never penalised |
 | `LANGUAGE_MODE` | `prefer` | `prefer`: a preferred language adds `LANGUAGE_BONUS` to the score (format rank still comes first, as in Radarr). `require`: a release tagged with another language is rejected ("language en") |
 | `LANGUAGE_BONUS` | `30` | Score bonus for a preferred language |

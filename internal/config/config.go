@@ -74,6 +74,10 @@ type Config struct {
 	RetryBackoffSeconds int
 
 	// Search Filtering
+	// MinSeeders drops torrent results below this seeder count. 0 keeps every
+	// result: indexers reached through an API often report no seeder count at
+	// all, and the user can still judge by the value shown.
+	MinSeeders          int
 	MinTorrentSizeBytes int64
 	MaxTorrentSizeBytes int64
 
@@ -352,6 +356,7 @@ func buildFromEnv() *Config {
 		MaxRetries:          getEnvInt("MAX_RETRIES", 2),
 		RetryBackoffSeconds: getEnvInt("RETRY_BACKOFF_SECONDS", 60),
 
+		MinSeeders:          getEnvInt("MIN_SEEDERS", 0),
 		MinTorrentSizeBytes: getEnvInt64("MIN_TORRENT_SIZE_BYTES", 10000),      // 10KB
 		MaxTorrentSizeBytes: getEnvInt64("MAX_TORRENT_SIZE_BYTES", 2000000000), // 2GB
 

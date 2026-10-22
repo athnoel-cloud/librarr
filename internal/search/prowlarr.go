@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/JeremiahM37/librarr/internal/config"
@@ -92,7 +93,9 @@ func (p *Prowlarr) categoriesForTab() []string {
 	case "audiobook":
 		return []string{"3030"}
 	case "manga":
-		return []string{"7020", "7030"}
+		// 7000 (Books) as well: indexers that only tag the parent category
+		// (YggTorrent, for one) would otherwise never show up on this tab.
+		return []string{"7000", "7020", "7030"}
 	default:
 		return []string{"7000", "7020"}
 	}
@@ -202,6 +205,7 @@ func (p *Prowlarr) doSearch(ctx context.Context, params prowlarrSearchParams) ([
 			InfoHash:         item.InfoHash,
 			GUID:             item.GUID,
 			DownloadProtocol: protocol,
+			Category:         item.categoryLabel(),
 			Format:           extractFormatFromTitle(item.Title),
 		})
 	}
@@ -220,6 +224,25 @@ type prowlarrItem struct {
 	InfoHash    string `json:"infoHash"`
 	GUID        string `json:"guid"`
 	Protocol    string `json:"protocol"`
+	Categories  []struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+	} `json:"categories"`
+}
+
+// categoryLabel joins the indexer categories of a release ("Books/EBook,
+// Movies/Foreign"); unnamed ones fall back to their numeric id.
+func (item prowlarrItem) categoryLabel() string {
+	var names []string
+	for _, c := range item.Categories {
+		switch {
+		case c.Name != "":
+			names = append(names, c.Name)
+		case c.ID != 0:
+			names = append(names, strconv.Itoa(c.ID))
+		}
+	}
+	return strings.Join(names, ", ")
 }
 
 // isNZBURL checks if a URL points to an NZB download.

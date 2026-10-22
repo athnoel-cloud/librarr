@@ -42,6 +42,8 @@ export interface SearchResult {
   sizeHuman?: string;
   leechers?: number;
   indexer?: string;
+  /** What the indexer says the release is: "Books/EBook", "Movies/Foreign", "Audio/Audiobook"... */
+  category?: string;
   // Relevance scoring, filled in by the server-side scorer (0–100).
   score?: number;
   score_breakdown?: ScoreBreakdown;

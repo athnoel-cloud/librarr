@@ -24,6 +24,10 @@ type SearchResult struct {
 	Format           string `json:"format,omitempty"`
 	MediaType        string `json:"media_type,omitempty"`        // ebook, audiobook, manga
 	DownloadProtocol string `json:"download_protocol,omitempty"` // "torrent" or "nzb"
+	// Category is what the indexer says the release is ("Books/EBook",
+	// "Books/Comics", "Movies/Foreign", "Audio/Audiobook"), so a user can tell
+	// a book from a video or an audiobook before downloading.
+	Category string `json:"category,omitempty"`
 
 	// Edition metadata, filled in by sources that publish it (Anna's Archive,
 	// Gutenberg). Language is an ISO 639 code ("en", "ru") so the UI can render
