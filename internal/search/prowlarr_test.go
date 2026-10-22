@@ -459,3 +459,40 @@ func TestProwlarr_SearchToleratesOneFailingVariant(t *testing.T) {
 		t.Fatalf("got %d results after %d calls, want 1 result from the second variant", len(results), calls)
 	}
 }
+
+type testCategory = struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+func TestProwlarr_CategoryLabelAndOffTopicFilter(t *testing.T) {
+	book := prowlarrItem{Title: "A Book", Categories: []testCategory{{7000, "Books"}, {107103, ""}}}
+	film := prowlarrItem{Title: "A Film", Categories: []testCategory{{2000, "Movies"}, {131681, ""}}}
+	custom := prowlarrItem{Title: "Unknown", Categories: []testCategory{{156719, ""}}}
+	audio := prowlarrItem{Title: "An Audiobook", Categories: []testCategory{{3030, "Audio/Audiobook"}}}
+
+	if got := book.categoryLabel(); got != "Books" {
+		t.Errorf("label with a named category: %q", got)
+	}
+	if got := custom.categoryLabel(); got != "156719" {
+		t.Errorf("label with only an indexer-specific category: %q", got)
+	}
+
+	main := &Prowlarr{tab: "main"}
+	manga := &Prowlarr{tab: "manga"}
+	abook := &Prowlarr{tab: "audiobook"}
+	cases := []struct {
+		p    *Prowlarr
+		item prowlarrItem
+		off  bool
+	}{
+		{main, book, false}, {main, film, true}, {main, custom, false}, {main, audio, true},
+		{manga, book, false}, {manga, film, true}, {manga, custom, false},
+		{abook, audio, false}, {abook, book, false}, {abook, film, true},
+	}
+	for _, c := range cases {
+		if got := c.p.offTopicForTab(c.item); got != c.off {
+			t.Errorf("tab %s, %q: offTopic = %v, want %v", c.p.tab, c.item.Title, got, c.off)
+		}
+	}
+}

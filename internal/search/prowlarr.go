@@ -179,6 +179,9 @@ func (p *Prowlarr) doSearch(ctx context.Context, params prowlarrSearchParams) ([
 
 	var results []models.SearchResult
 	for _, item := range items {
+		if p.offTopicForTab(item) {
+			continue
+		}
 		source := "torrent"
 		if p.tab == "audiobook" {
 			source = "prowlarr_audiobooks"
@@ -230,19 +233,49 @@ type prowlarrItem struct {
 	} `json:"categories"`
 }
 
-// categoryLabel joins the indexer categories of a release ("Books/EBook,
-// Movies/Foreign"); unnamed ones fall back to their numeric id.
+// categoryLabel joins the named indexer categories of a release ("Books/EBook,
+// Movies/Foreign"). Indexer-specific categories come without a name and a
+// six-digit id: they are only shown when nothing else names the release.
 func (item prowlarrItem) categoryLabel() string {
-	var names []string
+	var names, ids []string
 	for _, c := range item.Categories {
 		switch {
 		case c.Name != "":
 			names = append(names, c.Name)
 		case c.ID != 0:
-			names = append(names, strconv.Itoa(c.ID))
+			ids = append(ids, strconv.Itoa(c.ID))
 		}
 	}
-	return strings.Join(names, ", ")
+	if len(names) > 0 {
+		return strings.Join(names, ", ")
+	}
+	return strings.Join(ids, ", ")
+}
+
+// offTopicForTab reports whether the indexer explicitly files a release under
+// a group that cannot belong on this tab (a film or a TV episode on the books
+// or manga tab, a game on the audiobook tab). Public indexers ignore the
+// category filter Prowlarr sends, so the check has to happen here. A release
+// with a book category, or with only indexer-specific categories, is kept.
+func (p *Prowlarr) offTopicForTab(item prowlarrItem) bool {
+	wanted := func(id int) bool {
+		if p.tab == "audiobook" {
+			return id >= 3000 && id < 4000 || id >= 7000 && id < 8000
+		}
+		return id >= 7000 && id < 8000
+	}
+	known, off := false, false
+	for _, c := range item.Categories {
+		if c.ID < 1000 || c.ID >= 8000 {
+			continue // indexer-specific or unknown: says nothing
+		}
+		known = true
+		if wanted(c.ID) {
+			return false
+		}
+		off = true
+	}
+	return known && off
 }
 
 // isNZBURL checks if a URL points to an NZB download.
